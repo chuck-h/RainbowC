@@ -10,6 +10,11 @@ namespace eosio {
    using std::string;
 
    /**
+    * The `rainbowtoken` experimental contract implements the functionality described in the design document
+    * https://rieki-cordon.medium.com/1fb713efd9b1 .
+    * In the development process we are building on the eosio.token code. During development many original inline comments
+    * will continue to refer to `eosio.token`.
+    *
     * The `eosio.token` sample system contract defines the structures and actions that allow users to create, issue, and manage tokens for EOSIO based blockchains. It demonstrates one way to implement a smart contract which allows for creation and management of tokens. It is possible for one to create a similar contract which suits different needs. However, it is recommended that if one only needs a token with the below listed actions, that one uses the `eosio.token` contract instead of developing their own.
     * 
     * The `eosio.token` contract class also implements two useful public static methods: `get_supply` and `get_balance`. The first allows one to check the total supply of a specified token, created by an account and the second allows one to check the balance of a token for a specified account (the token creator account has to be specified as well).
@@ -18,7 +23,7 @@ namespace eosio {
     * 
     * Similarly, the `stats` multi-index table, holds instances of `currency_stats` objects for each row, which contains information about current supply, maximum supply, and the creator account for a symbol token. The `stats` table is scoped to the token symbol.  Therefore, when one queries the `stats` table for a token symbol the result is one single entry/row corresponding to the queried symbol token if it was previously created, or nothing, otherwise.
     */
-   class [[eosio::contract("rainbow.tkn")]] token : public contract {
+   class [[eosio::contract("rainbowtoken")]] token : public contract {
       public:
          using contract::contract;
 
