@@ -167,7 +167,7 @@ namespace eosio {
             bool     config_locked;
             bool     transfers_frozen;
 
-            uint64_t primary_key()const { return issuer.value; }
+            uint64_t primary_key()const { return supply.symbol.code().raw(); }
          };
 
          typedef eosio::multi_index< "accounts"_n, account > accounts;

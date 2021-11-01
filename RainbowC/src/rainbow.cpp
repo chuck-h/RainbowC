@@ -22,7 +22,7 @@ void token::create( const name&   issuer,
     check( is_account( freeze_mgr ), "freeze_mgr account does not exist");
 
     stats statstable( get_self(), sym.code().raw() );
-    auto existing = statstable.find( issuer.value );
+    auto existing = statstable.find( sym.code().raw() );
     if( existing != statstable.end()) {
        // token exists
        const auto& st = *existing;
