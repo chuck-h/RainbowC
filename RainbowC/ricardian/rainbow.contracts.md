@@ -1,7 +1,7 @@
 <h1 class="contract">close</h1>
 
 ---
-spec_version: "0.1.0"
+spec_version: "0.2.0"
 title: Close Token Balance
 summary: 'Close {{nowrap owner}}’s zero quantity balance'
 icon: @ICON_BASE_URL@/@TOKEN_ICON_URI@
@@ -14,24 +14,24 @@ RAM will be refunded to the RAM payer of the {{symbol_to_symbol_code symbol}} to
 <h1 class="contract">create</h1>
 
 ---
-spec_version: "0.1.0"
+spec_version: "0.2.0"
 title: Create New Token
 summary: 'Create a new token'
 icon: @ICON_BASE_URL@/@TOKEN_ICON_URI@
 ---
 
-{{$action.account}} agrees to create a new token with symbol {{asset_to_symbol_code maximum_supply}} to be managed by {{issuer}}.
+Creates a new token with symbol {{asset_to_symbol_code maximum_supply}} to be managed by {{issuer}}.
 
 This action will not result any any tokens being issued into circulation.
 
 {{issuer}} will be allowed to issue tokens into circulation, up to a maximum supply of {{maximum_supply}}.
 
-RAM will deducted from {{$action.account}}’s resources to create the necessary records.
+RAM will deducted from {{issuer}}’s resources to create the necessary records.
 
 <h1 class="contract">issue</h1>
 
 ---
-spec_version: "0.1.0"
+spec_version: "0.2.0"
 title: Issue Tokens into Circulation
 summary: 'Issue {{nowrap quantity}} into circulation and transfer into {{nowrap to}}’s account'
 icon: @ICON_BASE_URL@/@TOKEN_ICON_URI@
@@ -50,7 +50,7 @@ This action does not allow the total quantity to exceed the max allowed supply o
 <h1 class="contract">open</h1>
 
 ---
-spec_version: "0.1.0"
+spec_version: "0.2.0"
 title: Open Token Balance
 summary: 'Open a zero quantity balance for {{nowrap owner}}'
 icon: @ICON_BASE_URL@/@TOKEN_ICON_URI@
@@ -63,7 +63,7 @@ If {{owner}} does not have a balance for {{symbol_to_symbol_code symbol}}, {{ram
 <h1 class="contract">retire</h1>
 
 ---
-spec_version: "0.1.0"
+spec_version: "0.2.0"
 title: Remove Tokens from Circulation
 summary: 'Remove {{nowrap quantity}} from circulation'
 icon: @ICON_BASE_URL@/@TOKEN_ICON_URI@
@@ -78,7 +78,7 @@ The token manager agrees to remove {{quantity}} from circulation, taken from the
 <h1 class="contract">transfer</h1>
 
 ---
-spec_version: "0.1.0"
+spec_version: "0.2.0"
 title: Transfer Tokens
 summary: 'Send {{nowrap quantity}} from {{nowrap from}} to {{nowrap to}}'
 icon: @ICON_BASE_URL@/@TRANSFER_ICON_URI@
