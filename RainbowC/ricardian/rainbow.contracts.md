@@ -15,12 +15,17 @@ RAM will be refunded to the RAM payer of the {{symbol_to_symbol_code symbol}} to
 
 ---
 spec_version: "0.2.0"
-title: Create New Token
-summary: 'Create a new token'
+title: Create or Reconfigure Token
+summary: 'Create a new token, or reconfigure an existing token'
 icon: @ICON_BASE_URL@/@TOKEN_ICON_URI@
 ---
 
-Creates a new token with symbol {{asset_to_symbol_code maximum_supply}} to be managed by {{issuer}}.
+{{issuer}} agrees to create a new token with the following characteristics to be managed by {{issuer}}:
+symbol {{asset_to_symbol_code maximum_supply}}, {{staking_ratio}}, {{membership_mgr}}, {{membership_badge}},
+{{withdrawal_mgr}}, {{withdraw_to}}, {{freeze_mgr}}, {{bearer_redeem}}, {{config_locked}}.
+
+If this action is executed on an existing token, is authorized by the issuer, and the config_locked status is false,
+the token characteristics will be updated.
 
 This action will not result any any tokens being issued into circulation.
 

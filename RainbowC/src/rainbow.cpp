@@ -3,21 +3,58 @@
 namespace eosio {
 
 void token::create( const name&   issuer,
-                    const asset&  maximum_supply )
+                    const asset&  maximum_supply,
+                    const float&  staking_ratio,
+                    const name&   membership_mgr,
+                    const name&   withdrawal_mgr,
+                    const name&   withdraw_to,
+                    const name&   freeze_mgr,
+                    const bool&   bearer_redeem,
+                    const bool&   config_locked)
 {
     auto sym = maximum_supply.symbol;
     check( sym.is_valid(), "invalid symbol name" );
     check( maximum_supply.is_valid(), "invalid supply");
     check( maximum_supply.amount > 0, "max-supply must be positive");
+    check( is_account( membership_mgr ), "membership_mgr account does not exist");
+    check( is_account( withdrawal_mgr ), "withdrawal_mgr account does not exist");
+    check( is_account( withdraw_to ), "withdraw_to account does not exist");
+    check( is_account( freeze_mgr ), "freeze_mgr account does not exist");
 
     stats statstable( get_self(), sym.code().raw() );
-    auto existing = statstable.find( sym.code().raw() );
-    check( existing == statstable.end(), "token with symbol already exists" );
-
+    auto existing = statstable.find( issuer.value );
+    if( existing != statstable.end()) {
+       // token exists
+       const auto& st = *existing;
+       check( !st.config_locked, "token reconfiguration is locked");
+       statstable.modify (st, issuer, [&]( auto& s ) {
+          s.supply.symbol = maximum_supply.symbol;
+          s.max_supply    = maximum_supply;
+          s.issuer        = issuer;
+          s.staking_ratio = staking_ratio;
+          s.membership_mgr = membership_mgr;
+          s.withdrawal_mgr = withdrawal_mgr;
+          s.withdraw_to   = withdraw_to;
+          s.freeze_mgr    = freeze_mgr;
+          s.bearer_redeem = bearer_redeem;
+          s.config_locked = config_locked;
+       });
+    return;
+    }
+    // new token
     statstable.emplace( issuer, [&]( auto& s ) {
        s.supply.symbol = maximum_supply.symbol;
        s.max_supply    = maximum_supply;
        s.issuer        = issuer;
+       s.staking_ratio = staking_ratio;
+       s.membership_mgr = membership_mgr;
+       s.withdrawal_mgr = withdrawal_mgr;
+       s.withdraw_to   = withdraw_to;
+       s.freeze_mgr    = freeze_mgr;
+       s.bearer_redeem = bearer_redeem;
+       s.config_locked = config_locked;
+       s.transfers_frozen = false;
+
     });
 }
 

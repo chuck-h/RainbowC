@@ -21,31 +21,56 @@ namespace eosio {
     * 
     * The `eosio.token` contract manages the set of tokens, accounts and their corresponding balances, by using two internal multi-index structures: the `accounts` and `stats`. The `accounts` multi-index table holds, for each row, instances of `account` object and the `account` object holds information about the balance of one token. The `accounts` table is scoped to an eosio account, and it keeps the rows indexed based on the token's symbol.  This means that when one queries the `accounts` multi-index table for an account name the result is all the tokens that account holds at the moment.
     * 
-    * Similarly, the `stats` multi-index table, holds instances of `currency_stats` objects for each row, which contains information about current supply, maximum supply, and the creator account for a symbol token. The `stats` table is scoped to the token symbol.  Therefore, when one queries the `stats` table for a token symbol the result is one single entry/row corresponding to the queried symbol token if it was previously created, or nothing, otherwise.
+    * Similarly, the `stats` multi-index table, holds instances of `currency_stats` objects for each row, which contains information about current supply, maximum supply, and the creator account for a symbol token. The `stats` table is scoped to the token symbol and indexed by the issuer.  Therefore, when one queries the `stats` table for a token symbol the result is all of the rainbow tokens issued under that token symbol, which may belong to different issuers.
     */
    class [[eosio::contract("rainbowtoken")]] token : public contract {
       public:
          using contract::contract;
 
          /**
-          * Allows `issuer` account to create a token in supply of `maximum_supply`. If validation is successful a new entry in statstable for token symbol scope gets created.
+          * Allows `issuer` account to create or reconfigure a token with the specified characteristics. If 
+          * the token does not exist, a new entry in statstable for token symbol scope gets created. If there
+          * is no row of the statstabe in that scope associated with the issuer, a new row gets created
+          * with the specified characteristics. If a token of this symbol and issuer does exist and update
+          * is permitted, the characteristics are updated.
           *
           * @param issuer - the account that creates the token,
-          * @param maximum_supply - the maximum supply set for the token created.
+          * @param maximum_supply - the maximum supply set for the token,
+          * @param staking_ratio - the number of dSeeds staked per token,
+          * @param membership_mgr - the account with authority to whitelist accounts to send tokens,
+          * @param withdrawal_mgr - the account with authority to withdraw tokens from any account,
+          * @param withdraw_to - the account to which withdrawn tokens are deposited,
+          * @param freeze_mgr - the account with authority to freeze transfer actions,
+          * @param bearer_redeem - a boolean allowing token holders to redeem the staked dSeeds,
+          * @param config_locked - a boolean prohibiting changes to token characteristics.
           *
           * @pre Token symbol has to be valid,
-          * @pre Token symbol must not be already created,
+          * @pre Token symbol must not be already created by this issuer, OR if it has been created,
+          *   the config_locked field in the statstable row must be false,
           * @pre maximum_supply has to be smaller than the maximum supply allowed by the system: 1^62 - 1.
-          * @pre Maximum supply must be positive;
+          * @pre Maximum supply must be positive,
+          * @pre staking ratio must be in a valid range
+          * @pre membership manager must be an existing account,
+          * @pre withdrawal manager must be an existing account,
+          * @pre withdraw_to must be an existing account,
+          * @pre freeze manager must be an existing account,
+          * @pre membership manager must be an existing account;
           */
          [[eosio::action]]
          void create( const name&   issuer,
-                      const asset&  maximum_supply);
+                      const asset&  maximum_supply,
+                      const float&  staking_ratio,
+                      const name&   membership_mgr,
+                      const name&   withdrawal_mgr,
+                      const name&   withdraw_to,
+                      const name&   freeze_mgr,
+                      const bool&   bearer_redeem,
+                      const bool&   config_locked);
          /**
           *  This action issues to `to` account a `quantity` of tokens.
           *
           * @param to - the account to issue tokens to, it must be the same as the issuer,
-          * @param quntity - the amount of tokens to be issued,
+          * @param quantity - the amount of tokens to be issued,
           * @memo - the memo string that accompanies the token issue transaction.
           */
          [[eosio::action]]
@@ -133,8 +158,16 @@ namespace eosio {
             asset    supply;
             asset    max_supply;
             name     issuer;
+            float  staking_ratio;
+            name     membership_mgr;
+            name     withdrawal_mgr;
+            name     withdraw_to;
+            name     freeze_mgr;
+            bool     bearer_redeem;
+            bool     config_locked;
+            bool     transfers_frozen;
 
-            uint64_t primary_key()const { return supply.symbol.code().raw(); }
+            uint64_t primary_key()const { return issuer.value; }
          };
 
          typedef eosio::multi_index< "accounts"_n, account > accounts;
