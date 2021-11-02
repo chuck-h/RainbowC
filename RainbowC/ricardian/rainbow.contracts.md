@@ -61,9 +61,9 @@ summary: 'Open a zero quantity balance for {{nowrap owner}}'
 icon: @ICON_BASE_URL@/@TOKEN_ICON_URI@
 ---
 
-{{ram_payer}} agrees to establish a zero quantity balance for {{owner}} for the {{symbol_to_symbol_code symbol}} token.
+{{ram_payer}} agrees to establish a zero quantity balance for {{owner}} for the {{symbol_to_symbol_code symbol}} token. As a result, RAM will be deducted from {{ram_payer}}’s resources to create the necessary records.
 
-If {{owner}} does not have a balance for {{symbol_to_symbol_code symbol}}, {{ram_payer}} will be designated as the RAM payer of the {{symbol_to_symbol_code symbol}} token balance for {{owner}}. As a result, RAM will be deducted from {{ram_payer}}’s resources to create the necessary records.
+The membership_mgr account configured during the create action must authorize this action, unless the membership_mgr account has been configured as "allowallacct".
 
 <h1 class="contract">retire</h1>
 
@@ -89,7 +89,17 @@ summary: 'Send {{nowrap quantity}} from {{nowrap from}} to {{nowrap to}}'
 icon: @ICON_BASE_URL@/@TRANSFER_ICON_URI@
 ---
 
-{{from}} agrees to send {{quantity}} to {{to}}.
+Caution: this contract text may not comply with the ricardian spec.
+
+{{quantity}} is transferred from {{from}} to {{to}} under the conditions below.
+
+Required Condition 1. either 
+  (a) {{to}} has been enabled by the membership_mgr by the `open` action, or
+  (b) the membership criterion has been disabled by setting membership_mgr to "allowallacct" in the `create`
+  action.
+Required Condition 2. either
+  (a) both [i] {{from}} has authorized the action AND [ii] transactions are NOT frozen, or
+  (b) both [i] the withdrawal_mgr has authorized the action AND [ii] {{to}} is the withdraw_to account.
 
 {{#if memo}}There is a memo attached to the transfer stating:
 {{memo}}

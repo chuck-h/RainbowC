@@ -12,11 +12,13 @@ void token::create( const name&   issuer,
                     const bool&   bearer_redeem,
                     const bool&   config_locked)
 {
+    require_auth( issuer );
     auto sym = maximum_supply.symbol;
     check( sym.is_valid(), "invalid symbol name" );
     check( maximum_supply.is_valid(), "invalid supply");
     check( maximum_supply.amount > 0, "max-supply must be positive");
-    check( is_account( membership_mgr ), "membership_mgr account does not exist");
+    check( is_account( membership_mgr ) || membership_mgr == allowallacct,
+        "membership_mgr account does not exist");
     check( is_account( withdrawal_mgr ), "withdrawal_mgr account does not exist");
     check( is_account( withdraw_to ), "withdraw_to account does not exist");
     check( is_account( freeze_mgr ), "freeze_mgr account does not exist");
@@ -115,11 +117,17 @@ void token::transfer( const name&    from,
                       const string&  memo )
 {
     check( from != to, "cannot transfer to self" );
-    require_auth( from );
+    check( is_account( from ), "from account does not exist");
     check( is_account( to ), "to account does not exist");
     auto sym = quantity.symbol.code();
     stats statstable( get_self(), sym.raw() );
     const auto& st = statstable.get( sym.raw() );
+
+    if( st.membership_mgr != allowallacct ) {
+       accounts to_acnts( get_self(), to.value );
+       auto to = to_acnts.find( sym.raw() );
+       check( to != to_acnts.end(), "to account must have membership");
+    }
 
     require_recipient( from );
     require_recipient( to );
@@ -128,6 +136,15 @@ void token::transfer( const name&    from,
     check( quantity.amount > 0, "must transfer positive quantity" );
     check( quantity.symbol == st.supply.symbol, "symbol precision mismatch" );
     check( memo.size() <= 256, "memo has more than 256 bytes" );
+
+    bool withdrawing = get_self() == st.withdrawal_mgr && to == st.withdraw_to;
+    if (withdrawing ) {
+       require_auth( st.withdrawal_mgr );
+    } else {
+       require_auth( from );
+       check( !st.transfers_frozen, "transfers are frozen");
+       // TBD: implement token.seeds check_limit_transactions(from) ?
+    }
 
     auto payer = has_auth( to ) ? to : from;
 
@@ -171,7 +188,9 @@ void token::open( const name& owner, const symbol& symbol, const name& ram_payer
    stats statstable( get_self(), sym_code_raw );
    const auto& st = statstable.get( sym_code_raw, "symbol does not exist" );
    check( st.supply.symbol == symbol, "symbol precision mismatch" );
-
+   if( st.membership_mgr != allowallacct) {
+      require_auth( st.membership_mgr );
+   }
    accounts acnts( get_self(), owner.value );
    auto it = acnts.find( sym_code_raw );
    if( it == acnts.end() ) {
@@ -191,4 +210,20 @@ void token::close( const name& owner, const symbol& symbol )
    acnts.erase( it );
 }
 
+void token::kill(const name& name )
+{
+   //auto sym_code_raw = symbol.code().raw();
+   stats statstable( get_self(), name.value );
+   for(auto itr = statstable.begin(); itr != statstable.end();) {
+        itr = statstable.erase(itr);
+   }
+}
+
+void token::killaccts(const name& owner )
+{
+   accounts acnts( get_self(), owner.value );
+   for(auto itr = acnts.begin(); itr != acnts.end();) {
+        itr = acnts.erase(itr);
+   }
+}
 } /// namespace eosio
