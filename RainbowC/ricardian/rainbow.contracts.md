@@ -88,7 +88,8 @@ summary: 'Remove {{nowrap quantity}} from circulation'
 icon: @ICON_BASE_URL@/@TOKEN_ICON_URI@
 ---
 
-The token manager agrees to remove {{quantity}} from circulation, taken from their own account.
+The {{nowrap owner}} agrees to remove {{quantity}} from circulation, taken from their own account.
+If configuration bearer_redeem is true, any owner may execute; if false, only the issuer may retire tokens.
 
 {{#if memo}} There is a memo attached to the action stating:
 {{memo}}

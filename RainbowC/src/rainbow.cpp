@@ -90,18 +90,20 @@ void token::issue( const name& to, const asset& quantity, const string& memo )
     add_balance( st.issuer, quantity, st.issuer );
 }
 
-void token::retire( const asset& quantity, const string& memo )
+void token::retire( const name& owner, const asset& quantity, const string& memo )
 {
     auto sym = quantity.symbol;
     check( sym.is_valid(), "invalid symbol name" );
     check( memo.size() <= 256, "memo has more than 256 bytes" );
 
     stats statstable( get_self(), sym.code().raw() );
-    auto existing = statstable.find( sym.code().raw() );
-    check( existing != statstable.end(), "token with symbol does not exist" );
-    const auto& st = *existing;
-
-    require_auth( st.issuer );
+    const auto& st = statstable.get( sym.code().raw(), "token with symbol does not exist" );
+    if( st.bearer_redeem ) {
+       check( !st.transfers_frozen, "transfers are frozen");
+    } else {
+       check( owner == st.issuer, "bearer redeem is disabled");
+    }
+    require_auth( owner );
     check( quantity.is_valid(), "invalid quantity" );
     check( quantity.amount > 0, "must retire positive quantity" );
 
@@ -111,7 +113,8 @@ void token::retire( const asset& quantity, const string& memo )
        s.supply -= quantity;
     });
 
-    sub_balance( st.issuer, quantity );
+    sub_balance( owner, quantity );
+    // TODO: reclaim staked Seeds
 }
 
 void token::transfer( const name&    from,
@@ -215,7 +218,6 @@ void token::freeze( const symbol& symbol, const bool& freeze )
 {
    auto sym_code_raw = symbol.code().raw();
    stats statstable( get_self(), sym_code_raw );
-   auto existing = statstable.find( sym_code_raw );
    const auto& st = statstable.get( sym_code_raw, "symbol does not exist" );
    require_auth( st.freeze_mgr );
    statstable.modify (st, same_payer, [&]( auto& s ) {
