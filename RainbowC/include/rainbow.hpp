@@ -37,7 +37,9 @@ namespace eosio {
           *
           * @param issuer - the account that creates the token,
           * @param maximum_supply - the maximum supply set for the token,
-          * @param staking_ratio - the number of dSeeds staked per token,
+          * @param stake_per_token - the number of stake tokens (Seeds) staked per token,
+          * @param stake_token_contract - the staked token contract account (token.seeds),
+          * @param stake_to - the escrow account where stake is held,
           * @param membership_mgr - the account with authority to whitelist accounts to send tokens,
           * @param withdrawal_mgr - the account with authority to withdraw tokens from any account,
           * @param withdraw_to - the account to which withdrawn tokens are deposited,
@@ -45,12 +47,14 @@ namespace eosio {
           * @param bearer_redeem - a boolean allowing token holders to redeem the staked dSeeds,
           * @param config_locked - a boolean prohibiting changes to token characteristics.
           *
+          * @pre issuer active permissions must include rainbowcontract@eosio.code, unless stake_per_token amount is 0
+          * @pre stake_to active permissions must include rainbowcontract@eosio.code, unless stake_per_token amount is 0
           * @pre Token symbol has to be valid,
           * @pre Token symbol must not be already created by this issuer, OR if it has been created,
           *   the config_locked field in the statstable row must be false,
           * @pre maximum_supply has to be smaller than the maximum supply allowed by the system: 1^62 - 1.
           * @pre Maximum supply must be positive,
-          * @pre staking ratio must be in a valid range
+          * @pre stake_per_token must be non-negative
           * @pre membership manager must be an existing account,
           * @pre withdrawal manager must be an existing account,
           * @pre withdraw_to must be an existing account,
@@ -60,7 +64,9 @@ namespace eosio {
          [[eosio::action]]
          void create( const name&   issuer,
                       const asset&  maximum_supply,
-                      const float&  staking_ratio,
+                      const asset&  stake_per_token,
+                      const name&   stake_token_contract,
+                      const name&   stake_to,
                       const name&   membership_mgr,
                       const name&   withdrawal_mgr,
                       const name&   withdraw_to,
@@ -188,7 +194,9 @@ namespace eosio {
             asset    supply;
             asset    max_supply;
             name     issuer;
-            float  staking_ratio;
+            asset    stake_per_token;
+            name     stake_token_contract;
+            name     stake_to;
             name     membership_mgr;
             name     withdrawal_mgr;
             name     withdraw_to;

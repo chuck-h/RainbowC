@@ -66,6 +66,8 @@ If {{to}} does not have a balance for {{asset_to_symbol_code quantity}}, or the 
 
 This action does not allow the total quantity to exceed the max allowed supply of the token.
 
+A proportionate number of staking tokens are transferred from {{to}}'s account to the stake_to escrow account
+
 <h1 class="contract">open</h1>
 
 ---
@@ -103,6 +105,8 @@ icon: @ICON_BASE_URL@/@TOKEN_ICON_URI@
 
 The {{nowrap owner}} agrees to remove {{quantity}} from circulation, taken from their own account.
 If configuration bearer_redeem is true, any owner may execute; if false, only the issuer may retire tokens.
+
+A proportionate number of staking tokens are transferred from the stake_to escrow account to {{owner}}'s account
 
 {{#if memo}} There is a memo attached to the action stating:
 {{memo}}

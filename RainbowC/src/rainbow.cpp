@@ -4,7 +4,9 @@ namespace eosio {
 
 void token::create( const name&   issuer,
                     const asset&  maximum_supply,
-                    const float&  staking_ratio,
+                    const asset&  stake_per_token,
+                    const name&   stake_token_contract,
+                    const name&   stake_to,
                     const name&   membership_mgr,
                     const name&   withdrawal_mgr,
                     const name&   withdraw_to,
@@ -17,6 +19,14 @@ void token::create( const name&   issuer,
     check( sym.is_valid(), "invalid symbol name" );
     check( maximum_supply.is_valid(), "invalid supply");
     check( maximum_supply.amount > 0, "max-supply must be positive");
+    auto stake_sym = stake_per_token.symbol;
+    check( stake_sym.is_valid(), "invalid stake symbol name" );
+    check( stake_per_token.is_valid(), "invalid stake");
+    check( stake_per_token.amount >= 0, "stake per token must be non-negative");
+    check( is_account( stake_token_contract ), "stake token contract account does not exist");
+    // TBD: check against whitelist of allowed contracts?
+    // can we test for functional contract here?
+    check( is_account( stake_to ), "stake_to account does not exist");
     check( is_account( membership_mgr ) || membership_mgr == allowallacct,
         "membership_mgr account does not exist");
     check( is_account( withdrawal_mgr ), "withdrawal_mgr account does not exist");
@@ -34,7 +44,9 @@ void token::create( const name&   issuer,
           s.supply.symbol = maximum_supply.symbol;
           s.max_supply    = maximum_supply;
           s.issuer        = issuer;
-          s.staking_ratio = staking_ratio;
+          s.stake_per_token = stake_per_token;
+          // s.stake_token_contract = stake_token_contract;
+          // s.stake_to      = stake_to;
           s.membership_mgr = membership_mgr;
           s.withdrawal_mgr = withdrawal_mgr;
           s.withdraw_to   = withdraw_to;
@@ -49,7 +61,9 @@ void token::create( const name&   issuer,
        s.supply.symbol = maximum_supply.symbol;
        s.max_supply    = maximum_supply;
        s.issuer        = issuer;
-       s.staking_ratio = staking_ratio;
+       s.stake_per_token = stake_per_token;
+       s.stake_token_contract = stake_token_contract;
+       s.stake_to      = stake_to;
        s.membership_mgr = membership_mgr;
        s.withdrawal_mgr = withdrawal_mgr;
        s.withdraw_to   = withdraw_to;
@@ -85,8 +99,23 @@ void token::issue( const name& to, const asset& quantity, const string& memo )
        s.supply += quantity;
     });
 
-    // TODO: stake Seeds if staking_ratio > 0
+    if( st.stake_per_token.amount > 0 ) {
+       double quantity_scaled = quantity.amount/pow(10.0, quantity.symbol.precision());
+       asset stake_quantity = st.stake_per_token;
+       stake_quantity.amount = (int64_t)round(st.stake_per_token.amount*quantity_scaled);
+       // TBD: are there potential exploits based on rounding inaccuracy?
 
+       action(
+          permission_level{st.issuer,"active"_n},
+          st.stake_token_contract,
+          "transfer"_n,
+          std::make_tuple(st.issuer,
+                          st.stake_to,
+                          stake_quantity,
+                          std::string("rainbow stake"))
+       ).send();
+    }
+       
     add_balance( st.issuer, quantity, st.issuer );
 }
 
@@ -114,7 +143,24 @@ void token::retire( const name& owner, const asset& quantity, const string& memo
     });
 
     sub_balance( owner, quantity );
-    // TODO: reclaim staked Seeds
+    // reclaim staked Seeds
+    if( st.stake_per_token.amount > 0 ) {
+       double quantity_scaled = quantity.amount/pow(10.0, quantity.symbol.precision());
+       asset stake_quantity = st.stake_per_token;
+       stake_quantity.amount = (int64_t)round(st.stake_per_token.amount*quantity_scaled);
+       // TBD: are there potential exploits based on rounding inaccuracy?
+
+       action(
+          permission_level{st.stake_to,"active"_n},
+          st.stake_token_contract,
+          "transfer"_n,
+          std::make_tuple(st.stake_to,
+                          owner,
+                          stake_quantity,
+                          std::string("rainbow unstake"))
+       ).send();
+    }
+
 }
 
 void token::transfer( const name&    from,
