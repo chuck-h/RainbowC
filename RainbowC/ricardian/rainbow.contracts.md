@@ -33,6 +33,20 @@ This action will not result any any tokens being issued into circulation.
 
 RAM will deducted from {{issuer}}’s resources to create the necessary records.
 
+<h1 class="contract">freeze</h1>
+
+---
+spec_version: "0.2.0"
+title: Freeze Token Transfers
+summary: 'Prevent non-Adminsitrative Token Transfers'
+icon: @ICON_BASE_URL@/@TOKEN_ICON_URI@
+---
+
+If {{freeze}} is true, transfers are suspended; if false, transfers are enabled.
+The freeze_mgr account configured during the `create` action must authorize this action.
+
+Note that token issuance and withdrawals by the withdrawal_mgr cannot be frozen.
+
 <h1 class="contract">issue</h1>
 
 ---

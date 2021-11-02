@@ -29,6 +29,7 @@ void token::create( const name&   issuer,
        // token exists
        const auto& st = *existing;
        check( !st.config_locked, "token reconfiguration is locked");
+       // TODO: check for changed staking_ratio & manage stake
        statstable.modify (st, issuer, [&]( auto& s ) {
           s.supply.symbol = maximum_supply.symbol;
           s.max_supply    = maximum_supply;
@@ -83,6 +84,8 @@ void token::issue( const name& to, const asset& quantity, const string& memo )
     statstable.modify( st, same_payer, [&]( auto& s ) {
        s.supply += quantity;
     });
+
+    // TODO: stake Seeds if staking_ratio > 0
 
     add_balance( st.issuer, quantity, st.issuer );
 }
@@ -206,6 +209,18 @@ void token::close( const name& owner, const symbol& symbol )
    check( it != acnts.end(), "Balance row already deleted or never existed. Action won't have any effect." );
    check( it->balance.amount == 0, "Cannot close because the balance is not zero." );
    acnts.erase( it );
+}
+
+void token::freeze( const symbol& symbol, const bool& freeze )
+{
+   auto sym_code_raw = symbol.code().raw();
+   stats statstable( get_self(), sym_code_raw );
+   auto existing = statstable.find( sym_code_raw );
+   const auto& st = statstable.get( sym_code_raw, "symbol does not exist" );
+   require_auth( st.freeze_mgr );
+   statstable.modify (st, same_payer, [&]( auto& s ) {
+      s.transfers_frozen = freeze;
+   });
 }
 
 

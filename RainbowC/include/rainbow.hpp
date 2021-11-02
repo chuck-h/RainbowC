@@ -127,6 +127,18 @@ namespace eosio {
          [[eosio::action]]
          void close( const name& owner, const symbol& symbol );
 
+         /**
+          * This action freezes or unfreezes transaction processing
+          * for token `symbol`.
+          *
+          * @param symbol - the symbol of the token to execute the freeze action for.
+          *
+          * @pre The symbol has to exist otherwise no action is executed,
+          * @pre Transaction must have the freeze_mgr authority 
+          */
+         [[eosio::action]]
+         void freeze( const symbol& symbol, const bool& freeze );
+
          static asset get_supply( const name& token_contract_account, const symbol_code& sym_code )
          {
             stats statstable( token_contract_account, sym_code.raw() );
@@ -147,6 +159,7 @@ namespace eosio {
          using transfer_action = eosio::action_wrapper<"transfer"_n, &token::transfer>;
          using open_action = eosio::action_wrapper<"open"_n, &token::open>;
          using close_action = eosio::action_wrapper<"close"_n, &token::close>;
+         using freeze_action = eosio::action_wrapper<"freeze"_n, &token::freeze>;
       private:
          const name allowallacct = "allowallacct"_n;
          struct [[eosio::table]] account {
