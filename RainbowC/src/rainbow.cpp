@@ -137,10 +137,8 @@ void token::transfer( const name&    from,
     check( quantity.symbol == st.supply.symbol, "symbol precision mismatch" );
     check( memo.size() <= 256, "memo has more than 256 bytes" );
 
-    bool withdrawing = get_self() == st.withdrawal_mgr && to == st.withdraw_to;
-    if (withdrawing ) {
-       require_auth( st.withdrawal_mgr );
-    } else {
+    bool withdrawing = has_auth( st.withdrawal_mgr ) && to == st.withdraw_to;
+    if (!withdrawing ) {
        require_auth( from );
        check( !st.transfers_frozen, "transfers are frozen");
        // TBD: implement token.seeds check_limit_transactions(from) ?
@@ -158,7 +156,7 @@ void token::sub_balance( const name& owner, const asset& value ) {
    const auto& from = from_acnts.get( value.symbol.code().raw(), "no balance object found" );
    check( from.balance.amount >= value.amount, "overdrawn balance" );
 
-   from_acnts.modify( from, owner, [&]( auto& a ) {
+   from_acnts.modify( from, same_payer, [&]( auto& a ) {
          a.balance -= value;
       });
 }
@@ -210,20 +208,5 @@ void token::close( const name& owner, const symbol& symbol )
    acnts.erase( it );
 }
 
-void token::kill(const name& name )
-{
-   //auto sym_code_raw = symbol.code().raw();
-   stats statstable( get_self(), name.value );
-   for(auto itr = statstable.begin(); itr != statstable.end();) {
-        itr = statstable.erase(itr);
-   }
-}
 
-void token::killaccts(const name& owner )
-{
-   accounts acnts( get_self(), owner.value );
-   for(auto itr = acnts.begin(); itr != acnts.end();) {
-        itr = acnts.erase(itr);
-   }
-}
 } /// namespace eosio

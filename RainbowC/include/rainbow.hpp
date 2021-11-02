@@ -127,12 +127,6 @@ namespace eosio {
          [[eosio::action]]
          void close( const name& owner, const symbol& symbol );
 
-         // temp
-         [[eosio::action]]
-         void kill( const name& name );
-         [[eosio::action]]
-         void killaccts( const name& owner );
-
          static asset get_supply( const name& token_contract_account, const symbol_code& sym_code )
          {
             stats statstable( token_contract_account, sym_code.raw() );
@@ -153,8 +147,6 @@ namespace eosio {
          using transfer_action = eosio::action_wrapper<"transfer"_n, &token::transfer>;
          using open_action = eosio::action_wrapper<"open"_n, &token::open>;
          using close_action = eosio::action_wrapper<"close"_n, &token::close>;
-         using kill_action = eosio::action_wrapper<"kill"_n, &token::kill>;
-         using killaccts_action = eosio::action_wrapper<"killaccts"_n, &token::killaccts>;
       private:
          const name allowallacct = "allowallacct"_n;
          struct [[eosio::table]] account {
