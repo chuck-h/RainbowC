@@ -225,5 +225,33 @@ void token::freeze( const symbol& symbol, const bool& freeze )
    });
 }
 
+void token::resetram( const name& table, const string& scope, const uint32_t& limit )
+{
+   require_auth( get_self() );
+   uint64_t scope_raw;
+   check( !scope.empty(), "scope string is empty" );
+   if( scope.length() <= 7 ) {
+      symbol_code code(scope);
+      check( code.is_valid(), "invalid symbol code" );
+      scope_raw = code.raw();
+   } else {
+      name n(scope);
+      scope_raw = n.value;
+   }
+   if( table == "stat"_n ) {
+      stats statstable( get_self(), scope_raw );
+      for(auto itr = statstable.begin(); itr != statstable.end();) {
+         itr = statstable.erase(itr);
+      }
+   } else if( table == "accounts"_n ) {
+      accounts acnts( get_self(), scope_raw );
+      for(auto itr = acnts.begin(); itr != acnts.end();) {
+         itr = acnts.erase(itr);
+      }
+   } else {
+      check( 0, "table name should be 'stat' or 'accounts'" );
+   }      
+}
+
 
 } /// namespace eosio

@@ -23,7 +23,7 @@ namespace eosio {
     * 
     * Similarly, the `stats` multi-index table, holds instances of `currency_stats` objects for each row, which contains information about current supply, maximum supply, the creator account, the freeze status, and a variety of configured parameters for a symbol token. The `stats` table is scoped to the token symbol. Therefore, when one queries the `stats` table for a token symbol the result is one single entry/row corresponding to the queried symbol token if it was previously created, or nothing, otherwise.
     */
-    */
+
    class [[eosio::contract("rainbowtoken")]] token : public contract {
       public:
          using contract::contract;
@@ -142,6 +142,18 @@ namespace eosio {
          [[eosio::action]]
          void freeze( const symbol& symbol, const bool& freeze );
 
+         /**
+          * This action clears a RAM table (development use only!)
+          *
+          * @param table - name of table
+          * @param scope - string
+          * @param limit - max number of erasures (for time control)
+          *
+          * @pre Transaction must have the contract account authority 
+          */
+         [[eosio::action]]
+         void resetram( const name& table, const string& scope, const uint32_t& limit );
+
          static asset get_supply( const name& token_contract_account, const symbol_code& sym_code )
          {
             stats statstable( token_contract_account, sym_code.raw() );
@@ -163,6 +175,7 @@ namespace eosio {
          using open_action = eosio::action_wrapper<"open"_n, &token::open>;
          using close_action = eosio::action_wrapper<"close"_n, &token::close>;
          using freeze_action = eosio::action_wrapper<"freeze"_n, &token::freeze>;
+         using resetram_action = eosio::action_wrapper<"resetram"_n, &token::resetram>;
       private:
          const name allowallacct = "allowallacct"_n;
          struct [[eosio::table]] account {

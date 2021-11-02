@@ -79,6 +79,19 @@ icon: @ICON_BASE_URL@/@TOKEN_ICON_URI@
 
 The membership_mgr account configured during the create action must authorize this action, unless the membership_mgr account has been configured as "allowallacct".
 
+<h1 class="contract">resetram</h1>
+
+---
+spec_version: "0.2.0"
+title: Reset Table RAM
+summary: 'Clears rows of a RAM table named {{name}} with {{scope}}'
+icon: @ICON_BASE_URL@/@TOKEN_ICON_URI@
+---
+
+Contract owner agrees to erase all rows of the specified table and scope. As a result, nonzero balances may be destroyed.
+
+This action is intended for use during development or disaster recovery only.
+
 <h1 class="contract">retire</h1>
 
 ---
