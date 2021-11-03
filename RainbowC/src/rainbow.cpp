@@ -286,14 +286,15 @@ void token::resetram( const name& table, const string& scope, const uint32_t& li
       name n(scope);
       scope_raw = n.value;
    }
+   uint32_t counter = 0;
    if( table == "stat"_n ) {
       stats statstable( get_self(), scope_raw );
-      for(auto itr = statstable.begin(); itr != statstable.end();) {
+      for( auto itr = statstable.begin(); itr != statstable.end() && counter<limit; counter++ ) {
          itr = statstable.erase(itr);
       }
    } else if( table == "accounts"_n ) {
       accounts acnts( get_self(), scope_raw );
-      for(auto itr = acnts.begin(); itr != acnts.end();) {
+      for( auto itr = acnts.begin(); itr != acnts.end() && counter<limit; counter++ ) {
          itr = acnts.erase(itr);
       }
    } else {
