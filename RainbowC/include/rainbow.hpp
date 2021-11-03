@@ -74,14 +74,14 @@ namespace eosio {
                       const bool&   bearer_redeem,
                       const bool&   config_locked);
          /**
-          *  This action issues to `to` account a `quantity` of tokens.
+          *  This action issues a `quantity` of tokens to the issuer account.
           *
           * @param to - the account to issue tokens to, it must be the same as the issuer,
           * @param quantity - the amount of tokens to be issued,
           * @memo - the memo string that accompanies the token issue transaction.
           */
          [[eosio::action]]
-         void issue( const name& to, const asset& quantity, const string& memo );
+         void issue( const asset& quantity, const string& memo );
 
          /**
           * The opposite for issue action, if all validations succeed,
