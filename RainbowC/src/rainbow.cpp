@@ -252,7 +252,12 @@ void token::open( const name& owner, const symbol& symbol, const name& ram_payer
 
 void token::close( const name& owner, const symbol& symbol )
 {
-   require_auth( owner );
+   auto sym_code_raw = symbol.code().raw();
+   stats statstable( get_self(), sym_code_raw );
+   const auto& st = statstable.get( sym_code_raw, "symbol does not exist" );
+   if( st.membership_mgr == allowallacct || !has_auth( st.membership_mgr ) ) {
+      require_auth( owner );
+   }
    accounts acnts( get_self(), owner.value );
    auto it = acnts.find( symbol.code().raw() );
    check( it != acnts.end(), "Balance row already deleted or never existed. Action won't have any effect." );
