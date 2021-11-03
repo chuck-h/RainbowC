@@ -27,6 +27,7 @@ void token::create( const name&   issuer,
     // TBD: check against whitelist of allowed contracts?
     // can we test for functional contract here?
     check( is_account( stake_to ), "stake_to account does not exist");
+    // TODO: check that stake token exists and has correct symbol precision
     check( is_account( membership_mgr ) || membership_mgr == allowallacct,
         "membership_mgr account does not exist");
     check( is_account( withdrawal_mgr ), "withdrawal_mgr account does not exist");
