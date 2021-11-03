@@ -110,30 +110,30 @@ namespace eosio {
                         const string&  memo );
          /**
           * Allows `ram_payer` to create an account `owner` with zero balance for
-          * token `symbol` at the expense of `ram_payer`.
+          * token `symbolcode` at the expense of `ram_payer`.
           *
           * @param owner - the account to be created,
-          * @param symbol - the token to be payed with by `ram_payer`,
+          * @param symbolcode - the token symbol,
           * @param ram_payer - the account that supports the cost of this action.
           *
           * More information can be read [here](https://github.com/EOSIO/eosio.contracts/issues/62)
           * and [here](https://github.com/EOSIO/eosio.contracts/issues/61).
           */
          [[eosio::action]]
-         void open( const name& owner, const symbol& symbol, const name& ram_payer );
+         void open( const name& owner, const symbol_code& symbolcode, const name& ram_payer );
 
          /**
           * This action is the opposite for open, it closes the account `owner`
           * for token `symbol`.
           *
           * @param owner - the owner account to execute the close action for,
-          * @param symbol - the symbol of the token to execute the close action for.
+          * @param symbolcode - the symbol of the token to execute the close action for.
           *
           * @pre The pair of owner plus symbol has to exist otherwise no action is executed,
           * @pre If the pair of owner plus symbol exists, the balance has to be zero.
           */
          [[eosio::action]]
-         void close( const name& owner, const symbol& symbol );
+         void close( const name& owner, const symbol_code& symbolcode );
 
          /**
           * This action freezes or unfreezes transaction processing
@@ -146,7 +146,7 @@ namespace eosio {
           * @pre Transaction must have the freeze_mgr authority 
           */
          [[eosio::action]]
-         void freeze( const symbol& symbol, const bool& freeze );
+         void freeze( const symbol_code& symbolcode, const bool& freeze );
 
          /**
           * This action clears a RAM table (development use only!)

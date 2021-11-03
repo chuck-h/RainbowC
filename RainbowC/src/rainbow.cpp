@@ -226,16 +226,15 @@ void token::add_balance( const name& owner, const asset& value, const name& ram_
    }
 }
 
-void token::open( const name& owner, const symbol& symbol, const name& ram_payer )
+void token::open( const name& owner, const symbol_code& symbolcode, const name& ram_payer )
 {
    require_auth( ram_payer );
 
    check( is_account( owner ), "owner account does not exist" );
 
-   auto sym_code_raw = symbol.code().raw();
+   auto sym_code_raw = symbolcode.raw();
    stats statstable( get_self(), sym_code_raw );
    const auto& st = statstable.get( sym_code_raw, "symbol does not exist" );
-   check( st.supply.symbol == symbol, "symbol precision mismatch" );
    if( st.membership_mgr != allowallacct) {
       require_auth( st.membership_mgr );
    }
@@ -243,29 +242,29 @@ void token::open( const name& owner, const symbol& symbol, const name& ram_payer
    auto it = acnts.find( sym_code_raw );
    if( it == acnts.end() ) {
       acnts.emplace( ram_payer, [&]( auto& a ){
-        a.balance = asset{0, symbol};
+        a.balance = asset{0, st.supply.symbol};
       });
    }
 }
 
-void token::close( const name& owner, const symbol& symbol )
+void token::close( const name& owner, const symbol_code& symbolcode )
 {
-   auto sym_code_raw = symbol.code().raw();
+   auto sym_code_raw = symbolcode.raw();
    stats statstable( get_self(), sym_code_raw );
    const auto& st = statstable.get( sym_code_raw, "symbol does not exist" );
    if( st.membership_mgr == allowallacct || !has_auth( st.membership_mgr ) ) {
       require_auth( owner );
    }
    accounts acnts( get_self(), owner.value );
-   auto it = acnts.find( symbol.code().raw() );
+   auto it = acnts.find( sym_code_raw );
    check( it != acnts.end(), "Balance row already deleted or never existed. Action won't have any effect." );
    check( it->balance.amount == 0, "Cannot close because the balance is not zero." );
    acnts.erase( it );
 }
 
-void token::freeze( const symbol& symbol, const bool& freeze )
+void token::freeze( const symbol_code& symbolcode, const bool& freeze )
 {
-   auto sym_code_raw = symbol.code().raw();
+   auto sym_code_raw = symbolcode.raw();
    stats statstable( get_self(), sym_code_raw );
    const auto& st = statstable.get( sym_code_raw, "symbol does not exist" );
    require_auth( st.freeze_mgr );
