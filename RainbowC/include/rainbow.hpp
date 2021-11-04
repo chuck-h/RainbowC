@@ -141,12 +141,13 @@ namespace eosio {
           *
           * @param symbol - the symbol of the token to execute the freeze action for.
           * @param freeze - boolean, true = freeze, false = enable transfers.
+          * @param memo - the memo string to accompany the transaction.
           *
           * @pre The symbol has to exist otherwise no action is executed,
           * @pre Transaction must have the freeze_mgr authority 
           */
          [[eosio::action]]
-         void freeze( const symbol_code& symbolcode, const bool& freeze );
+         void freeze( const symbol_code& symbolcode, const bool& freeze, const string& memo );
 
          /**
           * This action clears a RAM table (development use only!)

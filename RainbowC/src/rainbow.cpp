@@ -191,7 +191,9 @@ void token::transfer( const name&    from,
     bool withdrawing = has_auth( st.withdrawal_mgr ) && to == st.withdraw_to;
     if (!withdrawing ) {
        require_auth( from );
-       check( !st.transfers_frozen, "transfers are frozen");
+       if( from != st.issuer ) {
+          check( !st.transfers_frozen, "transfers are frozen");
+       }
        // TBD: implement token.seeds check_limit_transactions(from) ?
     }
 
@@ -263,11 +265,12 @@ void token::close( const name& owner, const symbol_code& symbolcode )
    acnts.erase( it );
 }
 
-void token::freeze( const symbol_code& symbolcode, const bool& freeze )
+void token::freeze( const symbol_code& symbolcode, const bool& freeze, const string& memo )
 {
    auto sym_code_raw = symbolcode.raw();
    stats statstable( get_self(), sym_code_raw );
    const auto& st = statstable.get( sym_code_raw, "symbol does not exist" );
+   check( memo.size() <= 256, "memo has more than 256 bytes" );
    require_auth( st.freeze_mgr );
    statstable.modify (st, same_payer, [&]( auto& s ) {
       s.transfers_frozen = freeze;
