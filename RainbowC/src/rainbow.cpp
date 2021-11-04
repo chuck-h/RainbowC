@@ -40,14 +40,31 @@ void token::create( const name&   issuer,
        // token exists
        const auto& st = *existing;
        check( !st.config_locked, "token reconfiguration is locked");
-       // TODO: check for changed staking_ratio & manage stake
+       bool restaking = stake_per_token != st.stake_per_token ||
+                        stake_token_contract != st.stake_token_contract ||
+                        stake_to != st.stake_to;
+       bool destaking = stake_per_token.symbol == st.stake_per_token.symbol &&
+                        stake_token_contract == st.stake_token_contract &&
+                        stake_to == st.stake_to &&
+                        stake_per_token.amount == 0;
+       if( st.supply.amount != 0 ) {
+          check( sym == st.supply.symbol,
+                 "cannot change symbol precision with outstanding supply" );
+          check( maximum_supply.amount >= st.supply.amount,
+                 "cannot reduce maximum below outstanding supply" );
+          if( destaking ) {
+             unstake( st, st.issuer, st.supply.amount );
+          } else if ( restaking ) {
+             check( st.stake_per_token.amount == 0, "must destake before restaking");
+          }
+       }
        statstable.modify (st, issuer, [&]( auto& s ) {
           s.supply.symbol = maximum_supply.symbol;
           s.max_supply    = maximum_supply;
           s.issuer        = issuer;
           s.stake_per_token = stake_per_token;
-          // s.stake_token_contract = stake_token_contract;
-          // s.stake_to      = stake_to;
+          s.stake_token_contract = stake_token_contract;
+          s.stake_to      = stake_to;
           s.membership_mgr = membership_mgr;
           s.withdrawal_mgr = withdrawal_mgr;
           s.withdraw_to   = withdraw_to;
@@ -55,6 +72,9 @@ void token::create( const name&   issuer,
           s.bearer_redeem = bearer_redeem;
           s.config_locked = config_locked;
        });
+       if( restaking ) {
+          stake( st, st.supply.amount );
+       }
     return;
     }
     // new token
@@ -98,12 +118,16 @@ void token::issue( const asset& quantity, const string& memo )
        s.supply += quantity;
     });
 
-    if( st.stake_per_token.amount > 0 ) {
-       double quantity_scaled = quantity.amount/pow(10.0, quantity.symbol.precision());
-       asset stake_quantity = st.stake_per_token;
-       stake_quantity.amount = (int64_t)round(st.stake_per_token.amount*quantity_scaled);
-       // TBD: are there potential exploits based on rounding inaccuracy?
+    stake( st, quantity.amount );
+    add_balance( st.issuer, quantity, st.issuer );
+}
 
+void token::stake( const currency_stats st, const uint64_t amount ) {
+    if( st.stake_per_token.amount > 0 ) {
+       double amount_scaled = amount/pow(10.0, st.supply.symbol.precision());
+       asset stake_quantity = st.stake_per_token;
+       stake_quantity.amount = (int64_t)round(st.stake_per_token.amount*amount_scaled);
+       // TBD: are there potential exploits based on rounding inaccuracy?
        action(
           permission_level{st.issuer,"active"_n},
           st.stake_token_contract,
@@ -114,8 +138,6 @@ void token::issue( const asset& quantity, const string& memo )
                           std::string("rainbow stake"))
        ).send();
     }
-       
-    add_balance( st.issuer, quantity, st.issuer );
 }
 
 void token::retire( const name& owner, const asset& quantity, const string& memo )
@@ -142,13 +164,15 @@ void token::retire( const name& owner, const asset& quantity, const string& memo
     });
 
     sub_balance( owner, quantity );
-    // reclaim staked Seeds
-    if( st.stake_per_token.amount > 0 ) {
-       double quantity_scaled = quantity.amount/pow(10.0, quantity.symbol.precision());
-       asset stake_quantity = st.stake_per_token;
-       stake_quantity.amount = (int64_t)round(st.stake_per_token.amount*quantity_scaled);
-       // TBD: are there potential exploits based on rounding inaccuracy?
+    unstake( st, owner, quantity.amount );
+}
 
+void token::unstake( const currency_stats st, const name& owner, const uint64_t amount ) {
+    if( st.stake_per_token.amount > 0 ) {
+       double amount_scaled = amount/pow(10.0, st.supply.symbol.precision());
+       asset stake_quantity = st.stake_per_token;
+       stake_quantity.amount = (int64_t)round(st.stake_per_token.amount*amount_scaled);
+       // TBD: are there potential exploits based on rounding inaccuracy?
        action(
           permission_level{st.stake_to,"active"_n},
           st.stake_token_contract,
@@ -159,7 +183,6 @@ void token::retire( const name& owner, const asset& quantity, const string& memo
                           std::string("rainbow unstake"))
        ).send();
     }
-
 }
 
 void token::transfer( const name&    from,

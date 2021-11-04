@@ -214,6 +214,9 @@ namespace eosio {
 
          void sub_balance( const name& owner, const asset& value );
          void add_balance( const name& owner, const asset& value, const name& ram_payer );
+         void stake( const currency_stats st, const uint64_t amount );
+         void unstake( const currency_stats st, const name& owner, const uint64_t amount );
+ 
    };
 
 }
