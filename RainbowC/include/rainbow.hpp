@@ -209,6 +209,7 @@ namespace eosio {
          const name allowallacct = "allowallacct"_n;
          const name deletestakeacct = "deletestake"_n;
          const int max_stake_count = 5;
+         const name create_token_permission = "active"_n; //TODO: use custom permission
          struct [[eosio::table]] account {
             asset    balance;
 

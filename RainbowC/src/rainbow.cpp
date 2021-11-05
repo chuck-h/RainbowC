@@ -1,4 +1,5 @@
 #include <rainbow.hpp>
+#include <../capi/eosio/action.h>
 
 namespace eosio {
 
@@ -49,6 +50,7 @@ void token::create( const name&   issuer,
     return;
     }
     // new token
+    require_auth2( get_self().value, create_token_permission.value );
     statstable.emplace( issuer, [&]( auto& s ) {
        s.supply.symbol = maximum_supply.symbol;
        s.max_supply    = maximum_supply;
