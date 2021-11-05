@@ -29,17 +29,14 @@ namespace eosio {
          using contract::contract;
 
          /**
-          * Allows `issuer` account to create or reconfigure a token with the specified characteristics. If 
-          * the token does not exist, a new entry in statstable for token symbol scope gets created. If there
-          * is no row of the statstabe in that scope associated with the issuer, a new row gets created
-          * with the specified characteristics. If a token of this symbol and issuer does exist and update
+          * The ` create` action allows `issuer` account to create or reconfigure a token with the
+          * specified characteristics. 
+          * If the token does not exist, a new row in the stats table for token symbol scope is created
+          * with the specified characteristics. If a token of this symbol does exist and update
           * is permitted, the characteristics are updated.
           *
           * @param issuer - the account that creates the token,
           * @param maximum_supply - the maximum supply set for the token,
-          * @param stake_per_token - the number of stake tokens (Seeds) staked per token,
-          * @param stake_token_contract - the staked token contract account (token.seeds),
-          * @param stake_to - the escrow account where stake is held,
           * @param membership_mgr - the account with authority to whitelist accounts to send tokens,
           * @param withdrawal_mgr - the account with authority to withdraw tokens from any account,
           * @param withdraw_to - the account to which withdrawn tokens are deposited,
@@ -47,14 +44,11 @@ namespace eosio {
           * @param bearer_redeem - a boolean allowing token holders to redeem the staked dSeeds,
           * @param config_locked - a boolean prohibiting changes to token characteristics.
           *
-          * @pre issuer active permissions must include rainbowcontract@eosio.code, unless stake_per_token amount is 0
-          * @pre stake_to active permissions must include rainbowcontract@eosio.code, unless stake_per_token amount is 0
           * @pre Token symbol has to be valid,
-          * @pre Token symbol must not be already created by this issuer, OR if it has been created,
+          * @pre Token symbol must not be already created, OR if it has been created,
           *   the config_locked field in the statstable row must be false,
-          * @pre maximum_supply has to be smaller than the maximum supply allowed by the system: 1^62 - 1.
+          * @pre maximum_supply has to be smaller than the maximum supply allowed by the system: 2^62 - 1.
           * @pre Maximum supply must be positive,
-          * @pre stake_per_token must be non-negative
           * @pre membership manager must be an existing account,
           * @pre withdrawal manager must be an existing account,
           * @pre withdraw_to must be an existing account,
@@ -64,15 +58,42 @@ namespace eosio {
          [[eosio::action]]
          void create( const name&   issuer,
                       const asset&  maximum_supply,
-                      const asset&  stake_per_token,
-                      const name&   stake_token_contract,
-                      const name&   stake_to,
                       const name&   membership_mgr,
                       const name&   withdrawal_mgr,
                       const name&   withdraw_to,
                       const name&   freeze_mgr,
                       const bool&   bearer_redeem,
                       const bool&   config_locked);
+
+
+         /**
+          * Allows `issuer` account to create or reconfigure a staking relationship for a token. If 
+          * the relationship does not exist, a new entry in the stakes table for token symbol scope gets created. If there
+          * is no row of the stakes table in that scope associated with the issuer, a new row gets created
+          * with the specified characteristics. If a token of this symbol and issuer does exist and update
+          * is permitted, the characteristics are updated.
+          *
+          * @param issuer - the account that created the token,
+          * @param symbol_code - symbol code for the token,
+          * @param stake_per_token - the number of stake tokens (e.g. Seeds) staked per token,
+          * @param stake_token_contract - the staked token contract account (e.g. token.seeds),
+          * @param stake_to - the escrow account where stake is held, or `deletestake`
+          *   to remove a row from the stakes table
+          * @param memo - the memo string to accompany the transaction.
+          *
+          * @pre Token symbol must have already been created by this issuer, and the
+          *  config_locked field in the stats table must be false,
+          * @pre stake_per_token must be non-negative
+          * @pre issuer active permissions must include rainbowcontract@eosio.code
+          * @pre stake_to active permissions must include rainbowcontract@eosio.code
+          */
+         [[eosio::action]]
+         void setstake( const name&   issuer,
+                        const symbol_code&  token_code,
+                        const asset&  stake_per_token,
+                        const name&   stake_token_contract,
+                        const name&   stake_to,
+                        const string& memo);
          /**
           *  This action issues a `quantity` of tokens to the issuer account.
           *
@@ -176,6 +197,7 @@ namespace eosio {
          }
 
          using create_action = eosio::action_wrapper<"create"_n, &token::create>;
+         using setstake_action = eosio::action_wrapper<"setstake"_n, &token::setstake>;
          using issue_action = eosio::action_wrapper<"issue"_n, &token::issue>;
          using retire_action = eosio::action_wrapper<"retire"_n, &token::retire>;
          using transfer_action = eosio::action_wrapper<"transfer"_n, &token::transfer>;
@@ -185,6 +207,8 @@ namespace eosio {
          using resetram_action = eosio::action_wrapper<"resetram"_n, &token::resetram>;
       private:
          const name allowallacct = "allowallacct"_n;
+         const name deletestakeacct = "deletestake"_n;
+         const int max_stake_count = 5;
          struct [[eosio::table]] account {
             asset    balance;
 
@@ -195,9 +219,6 @@ namespace eosio {
             asset    supply;
             asset    max_supply;
             name     issuer;
-            asset    stake_per_token;
-            name     stake_token_contract;
-            name     stake_to;
             name     membership_mgr;
             name     withdrawal_mgr;
             name     withdraw_to;
@@ -209,13 +230,33 @@ namespace eosio {
             uint64_t primary_key()const { return supply.symbol.code().raw(); }
          };
 
+         struct [[eosio::table]] stake_stats {
+            uint64_t index;
+            asset    stake_per_token;
+            name     stake_token_contract;
+            name     stake_to;
+
+            uint64_t primary_key()const { return index; };
+            uint128_t by_secondary() const {
+               return (uint128_t)stake_per_token.symbol.raw()<<64 | stake_token_contract.value;
+            }
+         };
+
          typedef eosio::multi_index< "accounts"_n, account > accounts;
          typedef eosio::multi_index< "stat"_n, currency_stats > stats;
+         typedef eosio::multi_index
+            < "stakes"_n, stake_stats, indexed_by
+               < "staketoken"_n,
+                 const_mem_fun<stake_stats, uint128_t, &stake_stats::by_secondary >
+               >
+            > stakes;
 
          void sub_balance( const name& owner, const asset& value );
          void add_balance( const name& owner, const asset& value, const name& ram_payer );
-         void stake( const currency_stats st, const uint64_t amount );
-         void unstake( const currency_stats st, const name& owner, const uint64_t amount );
+         void stake_all( const currency_stats st, const uint64_t amount );
+         void unstake_all( const currency_stats st, const name& owner, const uint64_t amount );
+         void stake_one( const currency_stats st, const stake_stats sk, const uint64_t amount );
+         void unstake_one( const currency_stats st, const stake_stats sk, const name& owner, const uint64_t amount );
  
    };
 
