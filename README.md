@@ -4,6 +4,9 @@ The Rainbow Contract is a tool which supports digital *tokens* on the Telos bloc
 several different configuration options targeted towards different types of use cases. This Rainbow Contract was
 inspired by a concept for locally-controlled currency within the SEEDS ecosystem.
 
+Because of its flexibility, this Rainbow Contract may be useful as a "prototyping tool" for projects which anticipate
+evolving towards optimum token behavior through a series of trials.
+
 For more information on the Telos blockchain, see https://www.telos.net/ and https://eos.io/ . For more information on the SEEDS
 project, see https://joinseeds.earth and https://medium.com/joinseeds/rainbow-seeds-v1-0-combining-the-best-of-local-and-global-currencies-for-a-regenerative-economy-1fb713efd9b1 .
 
