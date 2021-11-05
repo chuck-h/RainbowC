@@ -96,7 +96,7 @@ void token::setstake( const name&   issuer,
     auto existing = stake_token_index.find( stake_token );
     if( existing != stake_token_index.end()) {
        // stake token exists in stakes table
-       auto sk = *existing;
+       const auto& sk = *existing;
        bool restaking = stake_per_token != sk.stake_per_token ||
                         stake_to != sk.stake_to;
        bool destaking = stake_to == sk.stake_to &&
