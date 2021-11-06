@@ -125,12 +125,16 @@ void token::setstake( const name&   issuer,
     int existing_stake_count = std::distance(stakestable.cbegin(),stakestable.cend());
     check( existing_stake_count <= max_stake_count, "stake count exceeded" );
     check( stake_to != deletestakeacct, "invalid stake_to account" );
-    stakestable.emplace( issuer, [&]( auto& s ) {
+    const auto& sk = *stakestable.emplace( issuer, [&]( auto& s ) {
        s.index                = stakestable.available_primary_key();
        s.stake_per_token      = stake_per_token;
        s.stake_token_contract = stake_token_contract;
        s.stake_to             = stake_to;
     });
+    if( st.supply.amount != 0 ) {
+       stake_one( st, sk, st.supply.amount );
+    }
+
 }
 
 
