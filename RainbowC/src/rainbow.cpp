@@ -81,12 +81,13 @@ void token::setstake( const name&   issuer,
     check( stake_per_token.is_valid(), "invalid stake");
     check( stake_per_token.amount >= 0, "stake per token must be non-negative");
     check( is_account( stake_token_contract ), "stake token contract account does not exist");
-    // TBD: check against whitelist of allowed contracts?
-    // can we test for functional contract here?
+    accounts accountstable( stake_token_contract, issuer.value );
+    const auto stake_bal = accountstable.find( stake_sym.code().raw() );
+    check( stake_bal != accountstable.end(), "issuer must have a stake token balance");
+    check( stake_bal->balance.symbol == stake_sym, "mismatched stake token precision" );
     if( stake_to != deletestakeacct ) {
        check( is_account( stake_to ), "stake_to account does not exist");
     }
-    // TODO: check that stake token exists and has correct symbol precision
     stats statstable( get_self(), token_code.raw() );
     const auto& st = statstable.get( token_code.raw(), "token with symbol does not exist" );
     check( !st.config_locked, "token reconfiguration is locked");
