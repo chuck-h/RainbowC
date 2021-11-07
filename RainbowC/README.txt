@@ -1,5 +1,9 @@
 --- rainbow Project ---
 
+ - Build environment eosio.cdt -
+   - for Ubuntu/Debian Linux, see https://github.com/EOSIO/eosio.cdt#debian-package-install
+   - for other OS, see README.md at the same repository
+   
  - How to Build -
    - cd to 'build' directory
    - run the command 'cmake ..'
