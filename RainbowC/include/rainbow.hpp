@@ -84,7 +84,7 @@ namespace eosio {
           * @pre Token symbol must have already been created by this issuer, and the
           *  config_locked field in the stats table must be false,
           * @pre issuer must have a (possibly zero) balance of the stake token,
-          * @pre stake_per_token must be non-negative
+          * @pre stake_per_bucket must be non-negative
           * @pre issuer active permissions must include rainbowcontract@eosio.code
           * @pre stake_to active permissions must include rainbowcontract@eosio.code
           */
@@ -251,7 +251,7 @@ namespace eosio {
          };
 
          typedef eosio::multi_index< "accounts"_n, account > accounts;
-         typedef eosio::multi_index< "statt"_n, currency_stats > stats;
+         typedef eosio::multi_index< "stat"_n, currency_stats > stats;
          typedef eosio::multi_index< "configs"_n, currency_config > configs;
          typedef eosio::multi_index
             < "stakes"_n, stake_stats, indexed_by

@@ -121,14 +121,10 @@ summary: 'Set staking configuration'
 icon: @ICON_BASE_URL@/@TOKEN_ICON_URI@
 ---
 
-{{issuer}} agrees to associate a staking contract, with the following characteristics, to a {{token_code}} currently managed by {{issuer}}: {{asset_to_symbol_code stake_per_token}}, {{stake_token_contract}}, {{stake_to}}.
+{{issuer}} agrees to associate a staking contract, with the following characteristics, to a token currently managed by {{issuer}}: {{asset_to_symbol_code token_bucket}}, {{asset_to_symbol_code stake_per_bucket}}, {{stake_token_contract}}, {{stake_to}}. The staking ratio (staked tokens per issued token) equals the stake_per_bucket quantity divided by the token_bucket quantity.
 
 If this action is executed on an existing token, is authorized by the issuer, the config_locked status is false, and the updated staking configuration would not exceed the maximum allowed count of stake relationships,
 the staking configuration will be updated.
-
-This action will not result any any tokens being issued into circulation.
-
-{{issuer}} will be allowed to issue tokens into circulation, up to a maximum supply of {{maximum_supply}}.
 
 RAM will deducted from {{issuer}}’s resources to create the necessary records.
 

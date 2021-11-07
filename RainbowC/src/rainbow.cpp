@@ -96,6 +96,7 @@ void token::setstake( const name&   issuer,
     if( stake_to != deletestakeacct ) {
        check( is_account( stake_to ), "stake_to account does not exist");
     }
+    check( token_bucket.amount > 0, "token bucket must be > 0" );
     auto sym_code_raw = token_bucket.symbol.code().raw();
     stats statstable( get_self(), sym_code_raw );
     const auto& st = statstable.get( sym_code_raw, "token with symbol does not exist" );
