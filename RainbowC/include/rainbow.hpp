@@ -181,7 +181,7 @@ namespace eosio {
           * @pre Transaction must have the contract account authority 
           */
          [[eosio::action]]
-         void resetram( const name& table, const string& scope, const uint32_t& limit );
+         void resetram( const name& table, const string& scope, const uint32_t& limit = 10 );
 
          static asset get_supply( const name& token_contract_account, const symbol_code& sym_code )
          {
