@@ -74,8 +74,8 @@ namespace eosio {
           * is permitted, the characteristics are updated.
           *
           * @param issuer - the account that created the token,
-          * @param symbol_code - symbol code for the token,
-          * @param stake_per_token - the number of stake tokens (e.g. Seeds) staked per token,
+          * @param token_bucket - a reference quantity of the token,
+          * @param stake_per_bucket - the number of stake tokens (e.g. Seeds) staked per "bucket" of tokens,
           * @param stake_token_contract - the staked token contract account (e.g. token.seeds),
           * @param stake_to - the escrow account where stake is held, or `deletestake`
           *   to remove a row from the stakes table
@@ -83,14 +83,15 @@ namespace eosio {
           *
           * @pre Token symbol must have already been created by this issuer, and the
           *  config_locked field in the stats table must be false,
+          * @pre issuer must have a (possibly zero) balance of the stake token,
           * @pre stake_per_token must be non-negative
           * @pre issuer active permissions must include rainbowcontract@eosio.code
           * @pre stake_to active permissions must include rainbowcontract@eosio.code
           */
          [[eosio::action]]
          void setstake( const name&   issuer,
-                        const symbol_code&  token_code,
-                        const asset&  stake_per_token,
+                        const asset&  token_bucket,
+                        const asset&  stake_per_bucket,
                         const name&   stake_token_contract,
                         const name&   stake_to,
                         const string& memo);
@@ -220,6 +221,11 @@ namespace eosio {
             asset    supply;
             asset    max_supply;
             name     issuer;
+
+            uint64_t primary_key()const { return supply.symbol.code().raw(); }
+         };
+
+         struct [[eosio::table]] currency_config {
             name     membership_mgr;
             name     withdrawal_mgr;
             name     withdraw_to;
@@ -228,23 +234,25 @@ namespace eosio {
             bool     config_locked;
             bool     transfers_frozen;
 
-            uint64_t primary_key()const { return supply.symbol.code().raw(); }
+            uint64_t primary_key()const { return 0; } // single row per scope
          };
 
          struct [[eosio::table]] stake_stats {
             uint64_t index;
-            asset    stake_per_token;
+            asset    token_bucket;
+            asset    stake_per_bucket;
             name     stake_token_contract;
             name     stake_to;
 
             uint64_t primary_key()const { return index; };
             uint128_t by_secondary() const {
-               return (uint128_t)stake_per_token.symbol.raw()<<64 | stake_token_contract.value;
+               return (uint128_t)stake_per_bucket.symbol.raw()<<64 | stake_token_contract.value;
             }
          };
 
          typedef eosio::multi_index< "accounts"_n, account > accounts;
-         typedef eosio::multi_index< "stat"_n, currency_stats > stats;
+         typedef eosio::multi_index< "statt"_n, currency_stats > stats;
+         typedef eosio::multi_index< "configs"_n, currency_config > configs;
          typedef eosio::multi_index
             < "stakes"_n, stake_stats, indexed_by
                < "staketoken"_n,
