@@ -10,7 +10,7 @@ void token::create( const name&   issuer,
                     const name&   withdraw_to,
                     const name&   freeze_mgr,
                     const bool&   bearer_redeem,
-                    const bool&   config_locked)
+                    const string& config_locked_until_string)
 {
     require_auth( issuer );
     auto sym = maximum_supply.symbol;
@@ -22,7 +22,13 @@ void token::create( const name&   issuer,
     check( is_account( withdrawal_mgr ), "withdrawal_mgr account does not exist");
     check( is_account( withdraw_to ), "withdraw_to account does not exist");
     check( is_account( freeze_mgr ), "freeze_mgr account does not exist");
-
+    time_point config_locked_until = current_time_point();
+    if( config_locked_until_string != "" ) {
+       config_locked_until = time_point::from_iso_string( config_locked_until_string );
+       auto days_from_now = (config_locked_until.time_since_epoch() -
+                             current_time_point().time_since_epoch()).count()/days(1).count();
+       check( days_from_now < 100*365 && days_from_now > -10*365, "config lock date out of range" );
+    }
     stats statstable( get_self(), sym.code().raw() );
     auto existing = statstable.find( sym.code().raw() );
     if( existing != statstable.end()) {
@@ -30,7 +36,8 @@ void token::create( const name&   issuer,
        const auto& st = *existing;
        configs configtable( get_self(), sym.code().raw() );
        const auto& cf = *configtable.begin();
-       check( !cf.config_locked, "token reconfiguration is locked" );
+       check( cf.config_locked_until.time_since_epoch() < current_time_point().time_since_epoch(),
+              "token reconfiguration is locked" );
        check( st.issuer == issuer, "mismatched issuer account" );
        if( st.supply.amount != 0 ) {
           check( sym == st.supply.symbol,
@@ -50,7 +57,7 @@ void token::create( const name&   issuer,
           s.withdraw_to   = withdraw_to;
           s.freeze_mgr    = freeze_mgr;
           s.bearer_redeem = bearer_redeem;
-          s.config_locked = config_locked;
+          s.config_locked_until = config_locked_until;
        });
     return;
     }
@@ -68,7 +75,7 @@ void token::create( const name&   issuer,
        s.withdraw_to   = withdraw_to;
        s.freeze_mgr    = freeze_mgr;
        s.bearer_redeem = bearer_redeem;
-       s.config_locked = config_locked;
+       s.config_locked_until = config_locked_until;
        s.transfers_frozen = false;
 
     });
@@ -102,7 +109,8 @@ void token::setstake( const name&   issuer,
     const auto& st = statstable.get( sym_code_raw, "token with symbol does not exist" );
     configs configtable( get_self(), sym_code_raw );
     const auto& cf = *configtable.begin();
-    check( !cf.config_locked, "token reconfiguration is locked");
+    check( cf.config_locked_until.time_since_epoch() < current_time_point().time_since_epoch(),
+           "token reconfiguration is locked" );
     check( st.issuer == issuer, "mismatched issuer account" );
     stakes stakestable( get_self(), sym_code_raw );
     auto stake_token_index = stakestable.get_index<"staketoken"_n>();

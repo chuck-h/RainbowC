@@ -2,6 +2,7 @@
 
 #include <eosio/asset.hpp>
 #include <eosio/eosio.hpp>
+#include <eosio/system.hpp>
 
 #include <string>
 
@@ -42,7 +43,8 @@ namespace eosio {
           * @param withdraw_to - the account to which withdrawn tokens are deposited,
           * @param freeze_mgr - the account with authority to freeze transfer actions,
           * @param bearer_redeem - a boolean allowing token holders to redeem the staked dSeeds,
-          * @param config_locked - a boolean prohibiting changes to token characteristics.
+          * @param config_locked_until - an ISO8601 date string; changes to token characteristics
+          *   are disallowed until this time; blank string is equivalent to "now" (i.e. unlocked).
           *
           * @pre Token symbol has to be valid,
           * @pre Token symbol must not be already created, OR if it has been created,
@@ -54,6 +56,7 @@ namespace eosio {
           * @pre withdraw_to must be an existing account,
           * @pre freeze manager must be an existing account,
           * @pre membership manager must be an existing account;
+          * @pre config_locked_until must specify a time within +100/-10 yrs of now;
           */
          [[eosio::action]]
          void create( const name&   issuer,
@@ -63,7 +66,7 @@ namespace eosio {
                       const name&   withdraw_to,
                       const name&   freeze_mgr,
                       const bool&   bearer_redeem,
-                      const bool&   config_locked);
+                      const string& config_locked_until);
 
 
          /**
@@ -226,13 +229,13 @@ namespace eosio {
          };
 
          struct [[eosio::table]] currency_config {
-            name     membership_mgr;
-            name     withdrawal_mgr;
-            name     withdraw_to;
-            name     freeze_mgr;
-            bool     bearer_redeem;
-            bool     config_locked;
-            bool     transfers_frozen;
+            name       membership_mgr;
+            name       withdrawal_mgr;
+            name       withdraw_to;
+            name       freeze_mgr;
+            bool       bearer_redeem;
+            time_point config_locked_until;
+            bool       transfers_frozen;
 
             uint64_t primary_key()const { return 0; } // single row per scope
          };
