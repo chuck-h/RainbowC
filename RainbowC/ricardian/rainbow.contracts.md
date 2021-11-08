@@ -21,7 +21,7 @@ icon: @ICON_BASE_URL@/@TOKEN_ICON_URI@
 ---
 
 {{issuer}} agrees to create a new token with the following characteristics to be managed by {{issuer}}:
-symbol {{asset_to_symbol_code maximum_supply}}, {{staking_ratio}}, {{membership_mgr}}, {{membership_badge}},
+symbol {{asset_to_symbol_code maximum_supply}}, {{membership_mgr}},
 {{withdrawal_mgr}}, {{withdraw_to}}, {{freeze_mgr}}, {{bearer_redeem}}, {{config_locked}}.
 
 If this action is executed on an existing token, is authorized by the issuer, and the config_locked status is false,
@@ -52,21 +52,21 @@ Note that token issuance and withdrawals by the withdrawal_mgr cannot be frozen.
 ---
 spec_version: "0.2.0"
 title: Issue Tokens into Circulation
-summary: 'Issue {{nowrap quantity}} into circulation and transfer into {{nowrap to}}’s account'
+summary: 'Issue {{nowrap quantity}} into circulation and transfer into issuer’s account'
 icon: @ICON_BASE_URL@/@TOKEN_ICON_URI@
 ---
 
-The token manager agrees to issue {{quantity}} into circulation, and transfer it into {{to}}’s account.
+The token manager agrees to issue {{quantity}} into circulation, and transfer it into the issuer account specified in the stats table.
 
 {{#if memo}}There is a memo attached to the transfer stating:
 {{memo}}
 {{/if}}
 
-If {{to}} does not have a balance for {{asset_to_symbol_code quantity}}, or the token manager does not have a balance for {{asset_to_symbol_code quantity}}, the token manager will be designated as the RAM payer of the {{asset_to_symbol_code quantity}} token balance for {{to}}. As a result, RAM will be deducted from the token manager’s resources to create the necessary records.
+RAM will be deducted from the token manager (issuer) resources to create the necessary records.
 
 This action does not allow the total quantity to exceed the max allowed supply of the token.
 
-A proportionate number of staking tokens are transferred from {{to}}'s account to the stake_to escrow account
+A proportionate number of staking tokens are transferred from issuer's account to the stake_to escrow account for each stake listed in the stake stats table.
 
 <h1 class="contract">open</h1>
 
@@ -112,6 +112,32 @@ A proportionate number of staking tokens are transferred from the stake_to escro
 {{memo}}
 {{/if}}
 
+<h1 class="contract">setstake</h1>
+
+---
+spec_version: "0.2.0"
+title: Create or Update a Staking Relationship for a Token
+summary: 'Set staking configuration'
+icon: @ICON_BASE_URL@/@TOKEN_ICON_URI@
+---
+
+{{issuer}} agrees to associate a staking contract, with the following characteristics, to a token currently managed by {{issuer}}: {{asset_to_symbol_code token_bucket}}, {{asset_to_symbol_code stake_per_bucket}}, {{stake_token_contract}}, {{stake_to}}. The staking ratio (staked tokens per issued token) equals the stake_per_bucket quantity divided by the token_bucket quantity.
+
+If this action is executed on an existing token, is authorized by the issuer, the config_locked status is false, and the updated staking configuration would not exceed the maximum allowed count of stake relationships,
+the staking configuration will be updated.
+
+RAM will deducted from {{issuer}}’s resources to create the necessary records.
+
+If a new staking relationship is created, or if the {{stake_per_token}} amount of an existing relationship is increased from a value of zero ("restaked"), a proportionate number of staking tokens are transferred from the issuer's account to the {{stake_to}} escrow account.
+
+If the {{stake_per_token}} amount of an existing relationship is decreased to a value of zero ("destaked"), a proportionate number of staking tokens are transferred from the stake_to escrow account to the issuer's account.
+
+If the {{stake_to}} account is the special name "deletestake", the staking relationship is removed from the stake table.
+
+{{#if memo}} There is a memo attached to the action stating:
+{{memo}}
+{{/if}}
+
 <h1 class="contract">transfer</h1>
 
 ---
@@ -130,8 +156,9 @@ Required Condition 1. either
   (b) the membership criterion has been disabled by setting membership_mgr to "allowallacct" in the `create`
   action.
 Required Condition 2. either
-  (a) both [i] {{from}} has authorized the action AND [ii] transactions are NOT frozen, or
-  (b) both [i] the withdrawal_mgr has authorized the action AND [ii] {{to}} is the withdraw_to account.
+  (a) {{from}} is the issuer, or
+  (b) both [i] {{from}} has authorized the action AND [ii] transactions are NOT frozen, or
+  (c) both [i] the withdrawal_mgr has authorized the action AND [ii] {{to}} is the withdraw_to account.
 
 {{#if memo}}There is a memo attached to the transfer stating:
 {{memo}}
