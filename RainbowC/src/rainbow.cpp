@@ -400,29 +400,21 @@ void token::resetram( const name& table, const string& scope, const uint32_t& li
       scope_raw = n.value;
    }
    uint32_t counter = 0;
-   if( table == "stat"_n ) {
-      stats statstable( get_self(), scope_raw );
-      for( auto itr = statstable.begin(); itr != statstable.end() && counter<limit; counter++ ) {
-         itr = statstable.erase(itr);
-      }
-   } else if( table == "configs"_n ) {
-      configs configtable( get_self(), scope_raw );
-      for( auto itr = configtable.begin(); itr != configtable.end() && counter<limit; counter++ ) {
-         itr = configtable.erase(itr);
-      }
-   } else if( table == "accounts"_n ) {
-      accounts acnts( get_self(), scope_raw );
-      for( auto itr = acnts.begin(); itr != acnts.end() && counter<limit; counter++ ) {
-         itr = acnts.erase(itr);
-      }
-   } else if( table == "stakes"_n ) {
+   if( table == "stakes"_n ) {
       stakes stakestable( get_self(), scope_raw );
       for( auto itr = stakestable.begin(); itr != stakestable.end() && counter<limit; counter++ ) {
          itr = stakestable.erase(itr);
       }
    } else {
-      check( 0, "table name should be 'stat', 'configs', 'accounts', or 'stakes'" );
-   }      
+     // generic erase for tables with no secondary indices
+     auto it = internal_use_do_not_use::db_lowerbound_i64(_self.value, scope_raw, table.value, 0);
+     while (it >= 0) {
+        auto del = it;
+        uint64_t dummy;
+        it = internal_use_do_not_use::db_next_i64(it, &dummy);
+        internal_use_do_not_use::db_remove_i64(del);
+    }
+  }
 }
 
 
