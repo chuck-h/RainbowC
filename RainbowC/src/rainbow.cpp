@@ -9,7 +9,7 @@ void token::create( const name&   issuer,
                     const name&   withdrawal_mgr,
                     const name&   withdraw_to,
                     const name&   freeze_mgr,
-                    const bool&   bearer_redeem,
+                    const string& redeem_locked_until_string,
                     const string& config_locked_until_string)
 {
     require_auth( issuer );
@@ -22,6 +22,13 @@ void token::create( const name&   issuer,
     check( is_account( withdrawal_mgr ), "withdrawal_mgr account does not exist");
     check( is_account( withdraw_to ), "withdraw_to account does not exist");
     check( is_account( freeze_mgr ), "freeze_mgr account does not exist");
+    time_point redeem_locked_until = current_time_point();
+    if( redeem_locked_until_string != "" ) {
+       redeem_locked_until = time_point::from_iso_string( redeem_locked_until_string );
+       auto days_from_now = (redeem_locked_until.time_since_epoch() -
+                             current_time_point().time_since_epoch()).count()/days(1).count();
+       check( days_from_now < 100*365 && days_from_now > -10*365, "redeem lock date out of range" );
+    }
     time_point config_locked_until = current_time_point();
     if( config_locked_until_string != "" ) {
        config_locked_until = time_point::from_iso_string( config_locked_until_string );
@@ -56,13 +63,12 @@ void token::create( const name&   issuer,
           s.withdrawal_mgr = withdrawal_mgr;
           s.withdraw_to   = withdraw_to;
           s.freeze_mgr    = freeze_mgr;
-          s.bearer_redeem = bearer_redeem;
+          s.redeem_locked_until = redeem_locked_until;
           s.config_locked_until = config_locked_until;
        });
     return;
     }
     // new token
-    require_auth2( get_self().value, create_token_permission.value );
     statstable.emplace( issuer, [&]( auto& s ) {
        s.supply.symbol = maximum_supply.symbol;
        s.max_supply    = maximum_supply;
@@ -74,10 +80,23 @@ void token::create( const name&   issuer,
        s.withdrawal_mgr = withdrawal_mgr;
        s.withdraw_to   = withdraw_to;
        s.freeze_mgr    = freeze_mgr;
-       s.bearer_redeem = bearer_redeem;
+       s.redeem_locked_until = redeem_locked_until;
        s.config_locked_until = config_locked_until;
        s.transfers_frozen = false;
+       s.approved      = false;
 
+    });
+}
+
+void token::approve( const symbol_code& symbolcode )
+{
+    require_auth( get_self() );
+    stats statstable( get_self(), symbolcode.raw() );
+    const auto& st = statstable.get( symbolcode.raw(), "token with symbol does not exist" );
+    configs configtable( get_self(), symbolcode.raw() );
+    const auto& cf = *configtable.begin();
+    configtable.modify (cf, st.issuer, [&]( auto& s ) {
+       s.approved    = true;
     });
 }
 
@@ -169,9 +188,10 @@ void token::issue( const asset& quantity, const string& memo )
     check( memo.size() <= 256, "memo has more than 256 bytes" );
 
     stats statstable( get_self(), sym.code().raw() );
-    auto existing = statstable.find( sym.code().raw() );
-    check( existing != statstable.end(), "token with symbol does not exist, create token before issue" );
-    const auto& st = *existing;
+    const auto& st = statstable.get( sym.code().raw(), "token with symbol does not exist, create token before issue" );
+    configs configtable( get_self(), sym.code().raw() );
+    const auto& cf = *configtable.begin();
+    check( cf.approved, "cannot issue until token is approved" );
     require_auth( st.issuer );
     check( quantity.is_valid(), "invalid quantity" );
     check( quantity.amount > 0, "must issue positive quantity" );
@@ -244,7 +264,7 @@ void token::retire( const name& owner, const asset& quantity, const string& memo
     const auto& st = statstable.get( sym.code().raw(), "token with symbol does not exist" );
     configs configtable( get_self(), sym.code().raw() );
     const auto& cf = *configtable.begin();
-    if( cf.bearer_redeem ) {
+    if( cf.redeem_locked_until.time_since_epoch() < current_time_point().time_since_epoch() ) {
        check( !cf.transfers_frozen, "transfers are frozen");
     } else {
        check( owner == st.issuer, "bearer redeem is disabled");
@@ -388,7 +408,7 @@ void token::freeze( const symbol_code& symbolcode, const bool& freeze, const str
 
 void token::resetram( const name& table, const string& scope, const uint32_t& limit )
 {
-   require_auth( get_self() );
+   require_auth2( get_self().value, "active"_n.value );
    uint64_t scope_raw;
    check( !scope.empty(), "scope string is empty" );
    if( scope.length() <= 7 ) {
@@ -400,29 +420,21 @@ void token::resetram( const name& table, const string& scope, const uint32_t& li
       scope_raw = n.value;
    }
    uint32_t counter = 0;
-   if( table == "stat"_n ) {
-      stats statstable( get_self(), scope_raw );
-      for( auto itr = statstable.begin(); itr != statstable.end() && counter<limit; counter++ ) {
-         itr = statstable.erase(itr);
-      }
-   } else if( table == "configs"_n ) {
-      configs configtable( get_self(), scope_raw );
-      for( auto itr = configtable.begin(); itr != configtable.end() && counter<limit; counter++ ) {
-         itr = configtable.erase(itr);
-      }
-   } else if( table == "accounts"_n ) {
-      accounts acnts( get_self(), scope_raw );
-      for( auto itr = acnts.begin(); itr != acnts.end() && counter<limit; counter++ ) {
-         itr = acnts.erase(itr);
-      }
-   } else if( table == "stakes"_n ) {
+   if( table == "stakes"_n ) {
       stakes stakestable( get_self(), scope_raw );
       for( auto itr = stakestable.begin(); itr != stakestable.end() && counter<limit; counter++ ) {
          itr = stakestable.erase(itr);
       }
    } else {
-      check( 0, "table name should be 'stat', 'configs', 'accounts', or 'stakes'" );
-   }      
+     // generic erase for tables with no secondary indices
+     auto it = internal_use_do_not_use::db_lowerbound_i64(_self.value, scope_raw, table.value, 0);
+     while (it >= 0) {
+        auto del = it;
+        uint64_t dummy;
+        it = internal_use_do_not_use::db_next_i64(it, &dummy);
+        internal_use_do_not_use::db_remove_i64(del);
+    }
+  }
 }
 
 

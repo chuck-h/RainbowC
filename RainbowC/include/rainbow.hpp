@@ -11,18 +11,23 @@ namespace eosio {
    using std::string;
 
    /**
-    * The `rainbowtoken` experimental contract implements the functionality described in the design document
+    * The `rainbow` experimental contract implements the functionality described in the design document
     * https://rieki-cordon.medium.com/1fb713efd9b1 .
-    * In the development process we are building on the eosio.token code. During development many original inline comments
-    * will continue to refer to `eosio.token`.
+    * In the development process we are building on the eosio.token code. 
     *
-    * The `eosio.token` sample system contract defines the structures and actions that allow users to create, issue, and manage tokens for EOSIO based blockchains. It demonstrates one way to implement a smart contract which allows for creation and management of tokens. It is possible for one to create a similar contract which suits different needs. 
+    * The token contract defines the structures and actions that allow users to create, issue, and manage tokens for EOSIO based blockchains. It exemplifies one way to implement a smart contract which allows for creation and management of tokens.
     * 
-    * The `rainbowtoken` contract class also implements two useful public static methods: `get_supply` and `get_balance`. The first allows one to check the total supply of a specified token, created by an account and the second allows one to check the balance of a token for a specified account (the token creator account has to be specified as well).
+    * The `rainbow` contract class also implements two useful public static methods: `get_supply` and `get_balance`. The first allows one to check the total supply of a specified token, created by an account and the second allows one to check the balance of a token for a specified account (the token creator account has to be specified as well).
     * 
-    * The `rainbowtoken` contract manages the set of tokens, accounts and their corresponding balances, by using two internal multi-index structures: the `accounts` and `stats`. The `accounts` multi-index table holds, for each row, instances of `account` object and the `account` object holds information about the balance of one token. The `accounts` table is scoped to an eosio account, and it keeps the rows indexed based on the token's symbol.  This means that when one queries the `accounts` multi-index table for an account name the result is all the tokens that account holds at the moment.
+    * The `rainbow` contract manages the set of tokens, stakes, accounts and their corresponding balances, by using four internal multi-index structures: the `accounts`, `stats`, `configs`, and `stakes`. The `accounts` multi-index table holds, for each row, instances of `account` object and the `account` object holds information about the balance of one token. The `accounts` table is scoped to an eosio account, and it keeps the rows indexed based on the token's symbol.  This means that when one queries the `accounts` multi-index table for an account name the result is all the tokens that account holds at the moment.
     * 
-    * Similarly, the `stats` multi-index table, holds instances of `currency_stats` objects for each row, which contains information about current supply, maximum supply, the creator account, the freeze status, and a variety of configured parameters for a symbol token. The `stats` table is scoped to the token symbol. Therefore, when one queries the `stats` table for a token symbol the result is one single entry/row corresponding to the queried symbol token if it was previously created, or nothing, otherwise.
+    * Similarly, the `stats` multi-index table, holds instances of `currency_stats` objects for each row, which contains information about current supply, maximum supply, and the creator account. The `stats` table is scoped to the token symbol_code. Therefore, when one queries the `stats` table for a token symbol the result is one single entry/row corresponding to the queried symbol token if it was previously created, or nothing, otherwise.
+    *
+    * The first two tables (`accounts` and `stats`) are structured identically to the `eosio.token` tables, making "rainbow tokens" compatible with most EOSIO wallet and block explorer applications. The two remaining tables (`configs` and `stakes`) provide additional data specific to the rainbow token.
+    *
+    * The `configs` table contains names of administration accounts (e.g. membership_mgr, freeze_mgr) and some configuration flags. The `configs` table is scoped to the token symbol_code and has a single row per scope.
+    *
+    * The `stakes` table contains staking relationships (staked currency, staking ratio, escrow account). It is scoped by the token symbol_code and may contain 1 or more rows. It has a secondary index based on the staked currency type.
     */
 
    class [[eosio::contract("rainbowtoken")]] token : public contract {
@@ -33,7 +38,8 @@ namespace eosio {
           * The ` create` action allows `issuer` account to create or reconfigure a token with the
           * specified characteristics. 
           * If the token does not exist, a new row in the stats table for token symbol scope is created
-          * with the specified characteristics. If a token of this symbol does exist and update
+          * with the specified characteristics. At creation, its' approval flag is false, preventing
+          * tokens from being issued. If a token of this symbol does exist and update
           * is permitted, the characteristics are updated.
           *
           * @param issuer - the account that creates the token,
@@ -42,13 +48,14 @@ namespace eosio {
           * @param withdrawal_mgr - the account with authority to withdraw tokens from any account,
           * @param withdraw_to - the account to which withdrawn tokens are deposited,
           * @param freeze_mgr - the account with authority to freeze transfer actions,
-          * @param bearer_redeem - a boolean allowing token holders to redeem the staked dSeeds,
+          * @param redeem_locked_until - an ISO8601 date string; user redemption of stake is
+          *   disallowed until this time; blank string is equivalent to "now" (i.e. unlocked).
           * @param config_locked_until - an ISO8601 date string; changes to token characteristics
           *   are disallowed until this time; blank string is equivalent to "now" (i.e. unlocked).
           *
           * @pre Token symbol has to be valid,
           * @pre Token symbol must not be already created, OR if it has been created,
-          *   the config_locked field in the statstable row must be false,
+          *   the config_locked field in the configtable row must be in the past,
           * @pre maximum_supply has to be smaller than the maximum supply allowed by the system: 2^62 - 1.
           * @pre Maximum supply must be positive,
           * @pre membership manager must be an existing account,
@@ -56,6 +63,7 @@ namespace eosio {
           * @pre withdraw_to must be an existing account,
           * @pre freeze manager must be an existing account,
           * @pre membership manager must be an existing account;
+          * @pre redeem_locked_until must specify a time within +100/-10 yrs of now;
           * @pre config_locked_until must specify a time within +100/-10 yrs of now;
           */
          [[eosio::action]]
@@ -65,8 +73,20 @@ namespace eosio {
                       const name&   withdrawal_mgr,
                       const name&   withdraw_to,
                       const name&   freeze_mgr,
-                      const bool&   bearer_redeem,
+                      const string& redeem_locked_until,
                       const string& config_locked_until);
+
+
+         /**
+          * By this action the contract owner approves the creation of the token. Until
+          * this approval, no tokens may be issued.
+          *
+          * @param symbolcode - the symbol_code of the token to execute the close action for.
+          *
+          * @pre The symbol must have been created.
+          */
+         [[eosio::action]]
+         void approve( const symbol_code& symbolcode );
 
 
          /**
@@ -84,8 +104,8 @@ namespace eosio {
           *   to remove a row from the stakes table
           * @param memo - the memo string to accompany the transaction.
           *
-          * @pre Token symbol must have already been created by this issuer, and the
-          *  config_locked field in the stats table must be false,
+          * @pre Token symbol must have already been created by this issuer
+          * @pre The config_locked_until field in the configs table must be in the past,
           * @pre issuer must have a (possibly zero) balance of the stake token,
           * @pre stake_per_bucket must be non-negative
           * @pre issuer active permissions must include rainbowcontract@eosio.code
@@ -104,17 +124,23 @@ namespace eosio {
           * @param to - the account to issue tokens to, it must be the same as the issuer,
           * @param quantity - the amount of tokens to be issued,
           * @memo - the memo string that accompanies the token issue transaction.
+          * 
+          * @pre The `approve` action must have been executed for this token symbol
           */
          [[eosio::action]]
          void issue( const asset& quantity, const string& memo );
 
          /**
           * The opposite for issue action, if all validations succeed,
-          * it debits the statstable.supply amount.
+          * it debits the statstable.supply amount. Any staked tokens are released from escrow in
+          * proportion to the quantity of tokens retired.
           *
           * @param owner - the account containing tokens to retire,
           * @param quantity - the quantity of tokens to retire,
           * @param memo - the memo string to accompany the transaction.
+          *
+          * @pre the redeem_locked_until configuration must be in the past (except that
+          *   this action is always permitted to the issuer.)
           */
          [[eosio::action]]
          void retire( const name& owner, const asset& quantity, const string& memo );
@@ -127,6 +153,9 @@ namespace eosio {
           * @param to - the account to be transferred to,
           * @param quantity - the quantity of tokens to be transferred,
           * @param memo - the memo string to accompany the transaction.
+          * 
+          * @pre The transfers_frozen flag in the configs table must be false, except for
+          *   administrative-account transfers
           */
          [[eosio::action]]
          void transfer( const name&    from,
@@ -201,6 +230,7 @@ namespace eosio {
          }
 
          using create_action = eosio::action_wrapper<"create"_n, &token::create>;
+         using approve_action = eosio::action_wrapper<"approve"_n, &token::approve>;
          using setstake_action = eosio::action_wrapper<"setstake"_n, &token::setstake>;
          using issue_action = eosio::action_wrapper<"issue"_n, &token::issue>;
          using retire_action = eosio::action_wrapper<"retire"_n, &token::retire>;
@@ -212,8 +242,7 @@ namespace eosio {
       private:
          const name allowallacct = "allowallacct"_n;
          const name deletestakeacct = "deletestake"_n;
-         const int max_stake_count = 5;
-         const name create_token_permission = "active"_n; //TODO: use custom permission
+         const int max_stake_count = 8; // don't use too much cpu time to complete transaction
          struct [[eosio::table]] account {
             asset    balance;
 
@@ -233,9 +262,10 @@ namespace eosio {
             name       withdrawal_mgr;
             name       withdraw_to;
             name       freeze_mgr;
-            bool       bearer_redeem;
+            time_point redeem_locked_until;
             time_point config_locked_until;
             bool       transfers_frozen;
+            bool       approved;
 
             uint64_t primary_key()const { return 0; } // single row per scope
          };
