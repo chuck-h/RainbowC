@@ -62,7 +62,6 @@ void token::create( const name&   issuer,
     return;
     }
     // new token
-    require_auth2( get_self().value, create_token_permission.value );
     statstable.emplace( issuer, [&]( auto& s ) {
        s.supply.symbol = maximum_supply.symbol;
        s.max_supply    = maximum_supply;
@@ -77,7 +76,20 @@ void token::create( const name&   issuer,
        s.bearer_redeem = bearer_redeem;
        s.config_locked_until = config_locked_until;
        s.transfers_frozen = false;
+       s.approved      = false;
 
+    });
+}
+
+void token::approve( const symbol_code& symbolcode )
+{
+    require_auth( get_self() );
+    stats statstable( get_self(), symbolcode.raw() );
+    const auto& st = statstable.get( symbolcode.raw(), "token with symbol does not exist" );
+    configs configtable( get_self(), symbolcode.raw() );
+    const auto& cf = *configtable.begin();
+    configtable.modify (cf, st.issuer, [&]( auto& s ) {
+       s.approved    = true;
     });
 }
 
@@ -169,9 +181,10 @@ void token::issue( const asset& quantity, const string& memo )
     check( memo.size() <= 256, "memo has more than 256 bytes" );
 
     stats statstable( get_self(), sym.code().raw() );
-    auto existing = statstable.find( sym.code().raw() );
-    check( existing != statstable.end(), "token with symbol does not exist, create token before issue" );
-    const auto& st = *existing;
+    const auto& st = statstable.get( sym.code().raw(), "token with symbol does not exist, create token before issue" );
+    configs configtable( get_self(), sym.code().raw() );
+    const auto& cf = *configtable.begin();
+    check( cf.approved, "cannot issue until token is approved" );
     require_auth( st.issuer );
     check( quantity.is_valid(), "invalid quantity" );
     check( quantity.amount > 0, "must issue positive quantity" );
@@ -388,7 +401,7 @@ void token::freeze( const symbol_code& symbolcode, const bool& freeze, const str
 
 void token::resetram( const name& table, const string& scope, const uint32_t& limit )
 {
-   require_auth( get_self() );
+   require_auth2( get_self().value, "active"_n.value );
    uint64_t scope_raw;
    check( !scope.empty(), "scope string is empty" );
    if( scope.length() <= 7 ) {
