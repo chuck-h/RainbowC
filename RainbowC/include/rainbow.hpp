@@ -48,7 +48,8 @@ namespace eosio {
           * @param withdrawal_mgr - the account with authority to withdraw tokens from any account,
           * @param withdraw_to - the account to which withdrawn tokens are deposited,
           * @param freeze_mgr - the account with authority to freeze transfer actions,
-          * @param bearer_redeem - a boolean allowing token holders to redeem the staked dSeeds,
+          * @param redeem_locked_until - an ISO8601 date string; user redemption of stake is
+          *   disallowed until this time; blank string is equivalent to "now" (i.e. unlocked).
           * @param config_locked_until - an ISO8601 date string; changes to token characteristics
           *   are disallowed until this time; blank string is equivalent to "now" (i.e. unlocked).
           *
@@ -62,6 +63,7 @@ namespace eosio {
           * @pre withdraw_to must be an existing account,
           * @pre freeze manager must be an existing account,
           * @pre membership manager must be an existing account;
+          * @pre redeem_locked_until must specify a time within +100/-10 yrs of now;
           * @pre config_locked_until must specify a time within +100/-10 yrs of now;
           */
          [[eosio::action]]
@@ -71,7 +73,7 @@ namespace eosio {
                       const name&   withdrawal_mgr,
                       const name&   withdraw_to,
                       const name&   freeze_mgr,
-                      const bool&   bearer_redeem,
+                      const string& redeem_locked_until,
                       const string& config_locked_until);
 
 
@@ -136,6 +138,9 @@ namespace eosio {
           * @param owner - the account containing tokens to retire,
           * @param quantity - the quantity of tokens to retire,
           * @param memo - the memo string to accompany the transaction.
+          *
+          * @pre the redeem_locked_until configuration must be in the past (except that
+          *   this action is always permitted to the issuer.)
           */
          [[eosio::action]]
          void retire( const name& owner, const asset& quantity, const string& memo );
@@ -237,7 +242,7 @@ namespace eosio {
       private:
          const name allowallacct = "allowallacct"_n;
          const name deletestakeacct = "deletestake"_n;
-         const int max_stake_count = 5;
+         const int max_stake_count = 8; // don't use too much cpu time to complete transaction
          struct [[eosio::table]] account {
             asset    balance;
 
@@ -257,7 +262,7 @@ namespace eosio {
             name       withdrawal_mgr;
             name       withdraw_to;
             name       freeze_mgr;
-            bool       bearer_redeem;
+            time_point redeem_locked_until;
             time_point config_locked_until;
             bool       transfers_frozen;
             bool       approved;

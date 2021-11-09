@@ -9,7 +9,7 @@ void token::create( const name&   issuer,
                     const name&   withdrawal_mgr,
                     const name&   withdraw_to,
                     const name&   freeze_mgr,
-                    const bool&   bearer_redeem,
+                    const string& redeem_locked_until_string,
                     const string& config_locked_until_string)
 {
     require_auth( issuer );
@@ -22,6 +22,13 @@ void token::create( const name&   issuer,
     check( is_account( withdrawal_mgr ), "withdrawal_mgr account does not exist");
     check( is_account( withdraw_to ), "withdraw_to account does not exist");
     check( is_account( freeze_mgr ), "freeze_mgr account does not exist");
+    time_point redeem_locked_until = current_time_point();
+    if( redeem_locked_until_string != "" ) {
+       redeem_locked_until = time_point::from_iso_string( redeem_locked_until_string );
+       auto days_from_now = (redeem_locked_until.time_since_epoch() -
+                             current_time_point().time_since_epoch()).count()/days(1).count();
+       check( days_from_now < 100*365 && days_from_now > -10*365, "redeem lock date out of range" );
+    }
     time_point config_locked_until = current_time_point();
     if( config_locked_until_string != "" ) {
        config_locked_until = time_point::from_iso_string( config_locked_until_string );
@@ -56,7 +63,7 @@ void token::create( const name&   issuer,
           s.withdrawal_mgr = withdrawal_mgr;
           s.withdraw_to   = withdraw_to;
           s.freeze_mgr    = freeze_mgr;
-          s.bearer_redeem = bearer_redeem;
+          s.redeem_locked_until = redeem_locked_until;
           s.config_locked_until = config_locked_until;
        });
     return;
@@ -73,7 +80,7 @@ void token::create( const name&   issuer,
        s.withdrawal_mgr = withdrawal_mgr;
        s.withdraw_to   = withdraw_to;
        s.freeze_mgr    = freeze_mgr;
-       s.bearer_redeem = bearer_redeem;
+       s.redeem_locked_until = redeem_locked_until;
        s.config_locked_until = config_locked_until;
        s.transfers_frozen = false;
        s.approved      = false;
@@ -257,7 +264,7 @@ void token::retire( const name& owner, const asset& quantity, const string& memo
     const auto& st = statstable.get( sym.code().raw(), "token with symbol does not exist" );
     configs configtable( get_self(), sym.code().raw() );
     const auto& cf = *configtable.begin();
-    if( cf.bearer_redeem ) {
+    if( cf.redeem_locked_until.time_since_epoch() < current_time_point().time_since_epoch() ) {
        check( !cf.transfers_frozen, "transfers are frozen");
     } else {
        check( owner == st.issuer, "bearer redeem is disabled");

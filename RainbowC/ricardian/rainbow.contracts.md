@@ -34,7 +34,7 @@ icon: @ICON_BASE_URL@/@TOKEN_ICON_URI@
 
 {{issuer}} agrees to create a new token with the following characteristics to be managed by {{issuer}}:
 symbol {{asset_to_symbol_code maximum_supply}}, {{membership_mgr}},
-{{withdrawal_mgr}}, {{withdraw_to}}, {{freeze_mgr}}, {{bearer_redeem}}, {{config_locked_until}}.
+{{withdrawal_mgr}}, {{withdraw_to}}, {{freeze_mgr}}, {{redeem_locked_until}}, {{config_locked_until}}.
 
 If this action is executed on an existing token, is authorized by the issuer, and the existing config_locked_until 
 value is in the past, the token characteristics will be updated.
@@ -116,7 +116,7 @@ icon: @ICON_BASE_URL@/@TOKEN_ICON_URI@
 ---
 
 The {{nowrap owner}} agrees to remove {{quantity}} from circulation, taken from their own account.
-If configuration bearer_redeem is true, any owner may execute; if false, only the issuer may retire tokens.
+If configuration redeem_locked_until is in the past, any owner may execute; if not, only the issuer may retire tokens.
 
 A proportionate number of staking tokens are transferred from the stake_to escrow account to {{owner}}'s account
 
