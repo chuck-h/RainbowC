@@ -1,4 +1,16 @@
-<h1 class="contract">close</h1>
+<h1 class="contract">approve</h1>
+
+---
+spec_version: "0.2.0"
+title: Approve Created Token
+summary: 'Approve characteristics of a newly created token'
+icon: @ICON_BASE_URL@/@TOKEN_ICON_URI@
+---
+
+The contract owner allows the issuer to begin issuing tokens under a newly created {{symbol_to_symbol_code symbol}}.
+Once approved, the issuer may modify the token configuration without any further approval action required.
+
+<<h1 class="contract">close</h1>
 
 ---
 spec_version: "0.2.0"
@@ -22,10 +34,10 @@ icon: @ICON_BASE_URL@/@TOKEN_ICON_URI@
 
 {{issuer}} agrees to create a new token with the following characteristics to be managed by {{issuer}}:
 symbol {{asset_to_symbol_code maximum_supply}}, {{membership_mgr}},
-{{withdrawal_mgr}}, {{withdraw_to}}, {{freeze_mgr}}, {{bearer_redeem}}, {{config_locked}}.
+{{withdrawal_mgr}}, {{withdraw_to}}, {{freeze_mgr}}, {{bearer_redeem}}, {{config_locked_until}}.
 
-If this action is executed on an existing token, is authorized by the issuer, and the config_locked status is false,
-the token characteristics will be updated.
+If this action is executed on an existing token, is authorized by the issuer, and the existing config_locked_until 
+value is in the past, the token characteristics will be updated.
 
 This action will not result any any tokens being issued into circulation.
 
@@ -56,7 +68,7 @@ summary: 'Issue {{nowrap quantity}} into circulation and transfer into issuer’
 icon: @ICON_BASE_URL@/@TOKEN_ICON_URI@
 ---
 
-The token manager agrees to issue {{quantity}} into circulation, and transfer it into the issuer account specified in the stats table.
+The token manager agrees to issue {{quantity}} into circulation, and transfer it into the issuer account specified in the stats table. Issuance is not permitted until the approve action has been executed.
 
 {{#if memo}}There is a memo attached to the transfer stating:
 {{memo}}

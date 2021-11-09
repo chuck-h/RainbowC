@@ -11,14 +11,13 @@ namespace eosio {
    using std::string;
 
    /**
-    * The `rainbowtoken` experimental contract implements the functionality described in the design document
+    * The `rainbow` experimental contract implements the functionality described in the design document
     * https://rieki-cordon.medium.com/1fb713efd9b1 .
-    * In the development process we are building on the eosio.token code. During development many original inline comments
-    * will continue to refer to `eosio.token`.
+    * In the development process we are building on the eosio.token code. 
     *
-    * The `eosio.token` sample system contract defines the structures and actions that allow users to create, issue, and manage tokens for EOSIO based blockchains. It demonstrates one way to implement a smart contract which allows for creation and management of tokens. It is possible for one to create a similar contract which suits different needs. 
+    * The token contract defines the structures and actions that allow users to create, issue, and manage tokens for EOSIO based blockchains. It exemplifies one way to implement a smart contract which allows for creation and management of tokens.
     * 
-    * The `rainbowtoken` contract class also implements two useful public static methods: `get_supply` and `get_balance`. The first allows one to check the total supply of a specified token, created by an account and the second allows one to check the balance of a token for a specified account (the token creator account has to be specified as well).
+    * The `rainbow` contract class also implements two useful public static methods: `get_supply` and `get_balance`. The first allows one to check the total supply of a specified token, created by an account and the second allows one to check the balance of a token for a specified account (the token creator account has to be specified as well).
     * 
     * The `rainbow` contract manages the set of tokens, stakes, accounts and their corresponding balances, by using four internal multi-index structures: the `accounts`, `stats`, `configs`, and `stakes`. The `accounts` multi-index table holds, for each row, instances of `account` object and the `account` object holds information about the balance of one token. The `accounts` table is scoped to an eosio account, and it keeps the rows indexed based on the token's symbol.  This means that when one queries the `accounts` multi-index table for an account name the result is all the tokens that account holds at the moment.
     * 
