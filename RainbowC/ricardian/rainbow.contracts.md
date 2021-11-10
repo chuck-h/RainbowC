@@ -79,7 +79,7 @@ RAM will be deducted from the token manager (issuer) resources to create the nec
 
 This action does not allow the total quantity to exceed the max allowed supply of the token.
 
-A proportionate number of staking tokens are transferred from issuer's account to the stake_to escrow account for each stake listed in the stake stats table.
+A proportionate number of staking tokens are transferred from issuer's account to the stake_to escrow account for each non-deferred stake listed in the stake stats table.
 
 <h1 class="contract">open</h1>
 

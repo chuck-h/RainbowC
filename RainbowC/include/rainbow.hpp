@@ -104,6 +104,7 @@ namespace eosio {
           * @param stake_token_contract - the staked token contract account (e.g. token.seeds),
           * @param stake_to - the escrow account where stake is held, or `deletestake`
           *   to remove a row from the stakes table
+          * @param deferred - staking relationship does not transfer stake to escrow.
           * @param memo - the memo string to accompany the transaction.
           *
           * @pre Token symbol must have already been created by this issuer
@@ -119,9 +120,11 @@ namespace eosio {
                         const asset&  stake_per_bucket,
                         const name&   stake_token_contract,
                         const name&   stake_to,
+                        const bool&   deferred,
                         const string& memo);
          /**
-          *  This action issues a `quantity` of tokens to the issuer account.
+          *  This action issues a `quantity` of tokens to the issuer account, and transfers
+          *  a proportional amount of stake to escrow if staking is configured.
           *
           * @param to - the account to issue tokens to, it must be the same as the issuer,
           * @param quantity - the amount of tokens to be issued,
@@ -278,6 +281,7 @@ namespace eosio {
             asset    stake_per_bucket;
             name     stake_token_contract;
             name     stake_to;
+            bool     deferred;
 
             uint64_t primary_key()const { return index; };
             uint128_t by_secondary() const {

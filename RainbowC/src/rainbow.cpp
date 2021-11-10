@@ -117,6 +117,7 @@ void token::setstake( const name&   issuer,
                       const asset&  stake_per_bucket,
                       const name&   stake_token_contract,
                       const name&   stake_to,
+                      const bool&   deferred,
                       const string& memo)
 {
     require_auth( issuer );
@@ -151,11 +152,12 @@ void token::setstake( const name&   issuer,
        const auto& sk = *existing;
        bool restaking = token_bucket != sk.token_bucket ||
                         stake_per_bucket != sk.stake_per_bucket ||
-                        stake_to != sk.stake_to;
+                        stake_to != sk.stake_to ||
+                        deferred != sk.deferred;
        bool destaking = stake_to == sk.stake_to &&
                         stake_per_bucket.amount == 0;
        if( st.supply.amount != 0 ) {
-          if( destaking ) {
+          if( destaking && !deferred) {
              unstake_one( st, sk, st.issuer, st.supply.amount );
           } else if ( restaking ) {
              check( sk.stake_per_bucket.amount == 0, "must destake before restaking");
@@ -169,8 +171,9 @@ void token::setstake( const name&   issuer,
           s.stake_per_bucket = stake_per_bucket;
           s.stake_token_contract = stake_token_contract;
           s.stake_to = stake_to;
+          s.deferred = deferred;
        });
-       if( restaking ) {
+       if( restaking && !deferred ) {
           stake_one( st, sk, st.supply.amount );
        }
        return;
@@ -239,7 +242,9 @@ void token::stake_one( const currency_stats st, const stake_stats sk, const uint
 void token::stake_all( const currency_stats st, const uint64_t amount ) {
     stakes stakestable( get_self(), st.supply.symbol.code().raw() );
     for( auto itr = stakestable.begin(); itr != stakestable.end(); itr++ ) {
-       stake_one( st, *itr, amount );
+       if( !itr->deferred ) {
+          stake_one( st, *itr, amount );
+       }
     }
 }
 
