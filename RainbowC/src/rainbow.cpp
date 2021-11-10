@@ -88,16 +88,28 @@ void token::create( const name&   issuer,
     });
 }
 
-void token::approve( const symbol_code& symbolcode )
+void token::approve( const symbol_code& symbolcode, const bool& reject_and_clear )
 {
     require_auth( get_self() );
-    stats statstable( get_self(), symbolcode.raw() );
-    const auto& st = statstable.get( symbolcode.raw(), "token with symbol does not exist" );
-    configs configtable( get_self(), symbolcode.raw() );
+    auto sym_code_raw = symbolcode.raw();
+    stats statstable( get_self(), sym_code_raw );
+    const auto& st = statstable.get( sym_code_raw, "token with symbol does not exist" );
+    configs configtable( get_self(), sym_code_raw );
     const auto& cf = *configtable.begin();
-    configtable.modify (cf, st.issuer, [&]( auto& s ) {
-       s.approved    = true;
-    });
+    if( reject_and_clear ) {
+       check( st.supply.amount == 0, "cannot clear with outstanding tokens" );
+       stakes stakestable( get_self(), sym_code_raw );
+       for( auto itr = stakestable.begin(); itr != stakestable.end(); ) {
+          itr = stakestable.erase(itr);
+       }
+       configtable.erase( configtable.begin() );
+       statstable.erase( statstable.iterator_to(st) );
+    } else {
+       configtable.modify (cf, st.issuer, [&]( auto& s ) {
+          s.approved    = true;
+       });
+    }
+
 }
 
 void token::setstake( const name&   issuer,

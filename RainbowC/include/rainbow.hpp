@@ -78,15 +78,17 @@ namespace eosio {
 
 
          /**
-          * By this action the contract owner approves the creation of the token. Until
-          * this approval, no tokens may be issued.
+          * By this action the contract owner approves or rejects the creation of the token. Until
+          * this approval, no tokens may be issued. If rejected, and no issued tokens are outstanding,
+          * the table entries for this token are deleted.
           *
           * @param symbolcode - the symbol_code of the token to execute the close action for.
+          * @param reject_and_clear - if this flag is true, delete token; if false, approve creation
           *
           * @pre The symbol must have been created.
           */
          [[eosio::action]]
-         void approve( const symbol_code& symbolcode );
+         void approve( const symbol_code& symbolcode, const bool& reject_and_clear );
 
 
          /**

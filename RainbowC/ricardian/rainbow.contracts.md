@@ -3,12 +3,13 @@
 ---
 spec_version: "0.2.0"
 title: Approve Created Token
-summary: 'Approve characteristics of a newly created token'
+summary: 'Approve characteristics of a newly created token, or reject it'
 icon: @ICON_BASE_URL@/@TOKEN_ICON_URI@
 ---
 
 The contract owner allows the issuer to begin issuing tokens under a newly created {{symbol_to_symbol_code symbol}}.
 Once approved, the issuer may modify the token configuration without any further approval action required.
+If {{reject_and_clear}} is true, and there are no outstanding issued tokens, the token is deleted.
 
 <<h1 class="contract">close</h1>
 
