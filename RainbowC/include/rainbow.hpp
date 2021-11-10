@@ -301,10 +301,10 @@ namespace eosio {
 
          void sub_balance( const name& owner, const asset& value );
          void add_balance( const name& owner, const asset& value, const name& ram_payer );
-         void stake_all( const currency_stats st, const uint64_t amount );
-         void unstake_all( const currency_stats st, const name& owner, const uint64_t amount );
-         void stake_one( const currency_stats st, const stake_stats sk, const uint64_t amount );
-         void unstake_one( const currency_stats st, const stake_stats sk, const name& owner, const uint64_t amount );
+         void stake_all( const name& owner, const asset& quantity );
+         void unstake_all( const name& owner, const asset& quantity );
+         void stake_one( const stake_stats& sk, const name& owner, const asset& quantity );
+         void unstake_one( const stake_stats& sk, const name& owner, const asset& quantity );
  
    };
 

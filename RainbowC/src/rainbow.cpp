@@ -158,7 +158,7 @@ void token::setstake( const name&   issuer,
                         stake_per_bucket.amount == 0;
        if( st.supply.amount != 0 ) {
           if( destaking && !deferred) {
-             unstake_one( st, sk, st.issuer, st.supply.amount );
+             unstake_one( sk, st.issuer, st.supply );
           } else if ( restaking ) {
              check( sk.stake_per_bucket.amount == 0, "must destake before restaking");
              if( stake_to == deletestakeacct ) {
@@ -174,7 +174,7 @@ void token::setstake( const name&   issuer,
           s.deferred = deferred;
        });
        if( restaking && !deferred ) {
-          stake_one( st, sk, st.supply.amount );
+          stake_one( sk, st.issuer, st.supply );
        }
        return;
     }
@@ -188,9 +188,10 @@ void token::setstake( const name&   issuer,
        s.stake_per_bucket      = stake_per_bucket;
        s.stake_token_contract = stake_token_contract;
        s.stake_to             = stake_to;
+       s.deferred             = deferred;
     });
     if( st.supply.amount != 0 ) {
-       stake_one( st, sk, st.supply.amount );
+       stake_one( sk, st.issuer, st.supply );
     }
 
 }
@@ -218,20 +219,19 @@ void token::issue( const asset& quantity, const string& memo )
        s.supply += quantity;
     });
 
-    stake_all( st, quantity.amount );
+    stake_all( st.issuer, quantity );
     add_balance( st.issuer, quantity, st.issuer );
 }
 
-void token::stake_one( const currency_stats st, const stake_stats sk, const uint64_t amount ) {
+void token::stake_one( const stake_stats& sk, const name& owner, const asset& quantity ) {
     if( sk.stake_per_bucket.amount > 0 ) {
        asset stake_quantity = sk.stake_per_bucket;
-       stake_quantity.amount = (int64_t)((int128_t)amount*sk.stake_per_bucket.amount/sk.token_bucket.amount);
-       // TBD: are there potential exploits based on rounding inaccuracy?
+       stake_quantity.amount = (int64_t)((int128_t)quantity.amount*sk.stake_per_bucket.amount/sk.token_bucket.amount);
        action(
-          permission_level{st.issuer,"active"_n},
+          permission_level{owner, "active"_n},
           sk.stake_token_contract,
           "transfer"_n,
-          std::make_tuple(st.issuer,
+          std::make_tuple(owner,
                           sk.stake_to,
                           stake_quantity,
                           std::string("rainbow stake"))
@@ -239,19 +239,19 @@ void token::stake_one( const currency_stats st, const stake_stats sk, const uint
     }
 }
 
-void token::stake_all( const currency_stats st, const uint64_t amount ) {
-    stakes stakestable( get_self(), st.supply.symbol.code().raw() );
+void token::stake_all( const name& owner, const asset& quantity ) {
+    stakes stakestable( get_self(), quantity.symbol.code().raw() );
     for( auto itr = stakestable.begin(); itr != stakestable.end(); itr++ ) {
        if( !itr->deferred ) {
-          stake_one( st, *itr, amount );
+          stake_one( *itr, owner, quantity );
        }
     }
 }
 
-void token::unstake_one( const currency_stats st, const stake_stats sk, const name& owner, const uint64_t amount ) {
+void token::unstake_one( const stake_stats& sk, const name& owner, const asset& quantity ) {
     if( sk.stake_per_bucket.amount > 0 ) {
        asset stake_quantity = sk.stake_per_bucket;
-       stake_quantity.amount = (int64_t)((int128_t)amount*sk.stake_per_bucket.amount/sk.token_bucket.amount);
+       stake_quantity.amount = (int64_t)((int128_t)quantity.amount*sk.stake_per_bucket.amount/sk.token_bucket.amount);
        // TBD: are there potential exploits based on rounding inaccuracy?
        action(
           permission_level{sk.stake_to,"active"_n},
@@ -264,10 +264,10 @@ void token::unstake_one( const currency_stats st, const stake_stats sk, const na
        ).send();
     }
 }
-void token::unstake_all( const currency_stats st, const name& owner, const uint64_t amount ) {
-    stakes stakestable( get_self(), st.supply.symbol.code().raw() );
+void token::unstake_all( const name& owner, const asset& quantity ) {
+    stakes stakestable( get_self(), quantity.symbol.code().raw() );
     for( auto itr = stakestable.begin(); itr != stakestable.end(); itr++ ) {
-       unstake_one( st, *itr, owner, amount );
+       unstake_one( *itr, owner, quantity );
     }
 }
 
@@ -297,7 +297,7 @@ void token::retire( const name& owner, const asset& quantity, const string& memo
     });
 
     sub_balance( owner, quantity );
-    unstake_all( st, owner, quantity.amount );
+    unstake_all( owner, quantity );
 }
 
 void token::transfer( const name&    from,
