@@ -105,6 +105,7 @@ namespace eosio {
           * @param stake_to - the escrow account where stake is held, or `deletestake`
           *   to remove a row from the stakes table
           * @param deferred - staking relationship does not transfer stake to escrow.
+          * @param proportional - redeem by proportion of escrow rather than by staking ratio.
           * @param memo - the memo string to accompany the transaction.
           *
           * @pre Token symbol must have already been created by this issuer
@@ -121,6 +122,7 @@ namespace eosio {
                         const name&   stake_token_contract,
                         const name&   stake_to,
                         const bool&   deferred,
+                        const bool&   proportional,
                         const string& memo);
          /**
           *  This action issues a `quantity` of tokens to the issuer account, and transfers
@@ -282,6 +284,7 @@ namespace eosio {
             name     stake_token_contract;
             name     stake_to;
             bool     deferred;
+            bool     proportional;
 
             uint64_t primary_key()const { return index; };
             uint128_t by_secondary() const {

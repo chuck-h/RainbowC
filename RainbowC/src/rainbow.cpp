@@ -118,6 +118,7 @@ void token::setstake( const name&   issuer,
                       const name&   stake_token_contract,
                       const name&   stake_to,
                       const bool&   deferred,
+                      const bool&   proportional,
                       const string& memo)
 {
     require_auth( issuer );
@@ -153,7 +154,8 @@ void token::setstake( const name&   issuer,
        bool restaking = token_bucket != sk.token_bucket ||
                         stake_per_bucket != sk.stake_per_bucket ||
                         stake_to != sk.stake_to ||
-                        deferred != sk.deferred;
+                        deferred != sk.deferred ||
+                        proportional != sk.proportional;
        bool destaking = stake_to == sk.stake_to &&
                         stake_per_bucket.amount == 0;
        if( st.supply.amount != 0 ) {
@@ -172,6 +174,7 @@ void token::setstake( const name&   issuer,
           s.stake_token_contract = stake_token_contract;
           s.stake_to = stake_to;
           s.deferred = deferred;
+          s.proportional = proportional;
        });
        if( restaking && !deferred ) {
           stake_one( sk, st.issuer, st.supply );
@@ -189,6 +192,7 @@ void token::setstake( const name&   issuer,
        s.stake_token_contract = stake_token_contract;
        s.stake_to             = stake_to;
        s.deferred             = deferred;
+       s.proportional         = proportional;
     });
     if( st.supply.amount != 0 ) {
        stake_one( sk, st.issuer, st.supply );
@@ -252,7 +256,8 @@ void token::unstake_one( const stake_stats& sk, const name& owner, const asset& 
     if( sk.stake_per_bucket.amount > 0 ) {
        asset stake_quantity = sk.stake_per_bucket;
        stake_quantity.amount = (int64_t)((int128_t)quantity.amount*sk.stake_per_bucket.amount/sk.token_bucket.amount);
-       // TBD: are there potential exploits based on rounding inaccuracy?
+       // TODO (a) if proportional, compute unstake amount based on current escrow balance and note in memo string
+       //      (b) if not proportional, check that escrow is fully funded
        action(
           permission_level{sk.stake_to,"active"_n},
           sk.stake_token_contract,
