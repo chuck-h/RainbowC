@@ -2,6 +2,7 @@
 
 #include <eosio/asset.hpp>
 #include <eosio/eosio.hpp>
+#include <eosio/singleton.hpp>
 #include <eosio/system.hpp>
 
 #include <string>
@@ -273,9 +274,9 @@ namespace eosio {
             time_point config_locked_until;
             bool       transfers_frozen;
             bool       approved;
-
-            uint64_t primary_key()const { return 0; } // single row per scope
          };
+
+         // TODO add another symbol_code-scoped singleton for logo info
 
          struct [[eosio::table]] stake_stats {
             uint64_t index;
@@ -294,7 +295,7 @@ namespace eosio {
 
          typedef eosio::multi_index< "accounts"_n, account > accounts;
          typedef eosio::multi_index< "stat"_n, currency_stats > stats;
-         typedef eosio::multi_index< "configs"_n, currency_config > configs;
+         typedef eosio::singleton< "configs"_n, currency_config > configs;
          typedef eosio::multi_index
             < "stakes"_n, stake_stats, indexed_by
                < "staketoken"_n,

@@ -42,7 +42,7 @@ void token::create( const name&   issuer,
        // token exists
        const auto& st = *existing;
        configs configtable( get_self(), sym.code().raw() );
-       const auto& cf = *configtable.begin();
+       auto cf = configtable.get();
        check( cf.config_locked_until.time_since_epoch() < current_time_point().time_since_epoch(),
               "token reconfiguration is locked" );
        check( st.issuer == issuer, "mismatched issuer account" );
@@ -58,14 +58,13 @@ void token::create( const name&   issuer,
           s.max_supply    = maximum_supply;
           s.issuer        = issuer;
        });
-       configtable.modify (cf, issuer, [&]( auto& s ) {
-          s.membership_mgr = membership_mgr;
-          s.withdrawal_mgr = withdrawal_mgr;
-          s.withdraw_to   = withdraw_to;
-          s.freeze_mgr    = freeze_mgr;
-          s.redeem_locked_until = redeem_locked_until;
-          s.config_locked_until = config_locked_until;
-       });
+       cf.membership_mgr = membership_mgr;
+       cf.withdrawal_mgr = withdrawal_mgr;
+       cf.withdraw_to   = withdraw_to;
+       cf.freeze_mgr    = freeze_mgr;
+       cf.redeem_locked_until = redeem_locked_until;
+       cf.config_locked_until = config_locked_until;
+       configtable.set( cf, issuer );
     return;
     }
     // new token
@@ -75,17 +74,17 @@ void token::create( const name&   issuer,
        s.issuer        = issuer;
     });
     configs configtable( get_self(), sym.code().raw() );
-    configtable.emplace( issuer, [&]( auto& s ) {
-       s.membership_mgr = membership_mgr;
-       s.withdrawal_mgr = withdrawal_mgr;
-       s.withdraw_to   = withdraw_to;
-       s.freeze_mgr    = freeze_mgr;
-       s.redeem_locked_until = redeem_locked_until;
-       s.config_locked_until = config_locked_until;
-       s.transfers_frozen = false;
-       s.approved      = false;
-
-    });
+    currency_config new_config{
+       .membership_mgr = membership_mgr,
+       .withdrawal_mgr = withdrawal_mgr,
+       .withdraw_to   = withdraw_to,
+       .freeze_mgr    = freeze_mgr,
+       .redeem_locked_until = redeem_locked_until,
+       .config_locked_until = config_locked_until,
+       .transfers_frozen = false,
+       .approved      = false
+    };
+    configtable.set( new_config, issuer );
 }
 
 void token::approve( const symbol_code& symbolcode, const bool& reject_and_clear )
@@ -95,19 +94,18 @@ void token::approve( const symbol_code& symbolcode, const bool& reject_and_clear
     stats statstable( get_self(), sym_code_raw );
     const auto& st = statstable.get( sym_code_raw, "token with symbol does not exist" );
     configs configtable( get_self(), sym_code_raw );
-    const auto& cf = *configtable.begin();
+    auto cf = configtable.get();
     if( reject_and_clear ) {
        check( st.supply.amount == 0, "cannot clear with outstanding tokens" );
        stakes stakestable( get_self(), sym_code_raw );
        for( auto itr = stakestable.begin(); itr != stakestable.end(); ) {
           itr = stakestable.erase(itr);
        }
-       configtable.erase( configtable.begin() );
+       configtable.remove( );
        statstable.erase( statstable.iterator_to(st) );
     } else {
-       configtable.modify (cf, st.issuer, [&]( auto& s ) {
-          s.approved    = true;
-       });
+       cf.approved = true;
+       configtable.set (cf, st.issuer );
     }
 
 }
@@ -141,7 +139,7 @@ void token::setstake( const name&   issuer,
     stats statstable( get_self(), sym_code_raw );
     const auto& st = statstable.get( sym_code_raw, "token with symbol does not exist" );
     configs configtable( get_self(), sym_code_raw );
-    const auto& cf = *configtable.begin();
+    const auto& cf = configtable.get();
     check( cf.config_locked_until.time_since_epoch() < current_time_point().time_since_epoch(),
            "token reconfiguration is locked" );
     check( st.issuer == issuer, "mismatched issuer account" );
@@ -210,7 +208,7 @@ void token::issue( const asset& quantity, const string& memo )
     stats statstable( get_self(), sym.code().raw() );
     const auto& st = statstable.get( sym.code().raw(), "token with symbol does not exist, create token before issue" );
     configs configtable( get_self(), sym.code().raw() );
-    const auto& cf = *configtable.begin();
+    const auto& cf = configtable.get();
     check( cf.approved, "cannot issue until token is approved" );
     require_auth( st.issuer );
     check( quantity.is_valid(), "invalid quantity" );
@@ -285,7 +283,7 @@ void token::retire( const name& owner, const asset& quantity, const string& memo
     stats statstable( get_self(), sym.code().raw() );
     const auto& st = statstable.get( sym.code().raw(), "token with symbol does not exist" );
     configs configtable( get_self(), sym.code().raw() );
-    const auto& cf = *configtable.begin();
+    const auto& cf = configtable.get();
     if( cf.redeem_locked_until.time_since_epoch() < current_time_point().time_since_epoch() ) {
        check( !cf.transfers_frozen, "transfers are frozen");
     } else {
@@ -317,7 +315,7 @@ void token::transfer( const name&    from,
     stats statstable( get_self(), sym_code_raw );
     const auto& st = statstable.get( sym_code_raw );
     configs configtable( get_self(), sym_code_raw );
-    const auto& cf = *configtable.begin();
+    const auto& cf = configtable.get();
 
     if( cf.membership_mgr != allowallacct ) {
        accounts to_acnts( get_self(), to.value );
@@ -384,7 +382,7 @@ void token::open( const name& owner, const symbol_code& symbolcode, const name& 
    stats statstable( get_self(), sym_code_raw );
    const auto& st = statstable.get( sym_code_raw, "symbol does not exist" );
    configs configtable( get_self(), sym_code_raw );
-   const auto& cf = *configtable.begin();
+   const auto& cf = configtable.get();
    if( cf.membership_mgr != allowallacct) {
       require_auth( cf.membership_mgr );
    }
@@ -403,7 +401,7 @@ void token::close( const name& owner, const symbol_code& symbolcode )
    stats statstable( get_self(), sym_code_raw );
    const auto& st = statstable.get( sym_code_raw, "symbol does not exist" );
    configs configtable( get_self(), sym_code_raw );
-   const auto& cf = *configtable.begin();
+   const auto& cf = configtable.get();
    if( cf.membership_mgr == allowallacct || !has_auth( cf.membership_mgr ) ) {
       require_auth( owner );
    }
@@ -420,12 +418,11 @@ void token::freeze( const symbol_code& symbolcode, const bool& freeze, const str
    stats statstable( get_self(), sym_code_raw );
    const auto& st = statstable.get( sym_code_raw, "symbol does not exist" );
    configs configtable( get_self(), sym_code_raw );
-   const auto& cf = *configtable.begin();
+   auto cf = configtable.get();
    check( memo.size() <= 256, "memo has more than 256 bytes" );
    require_auth( cf.freeze_mgr );
-   configtable.modify (cf, same_payer, [&]( auto& s ) {
-      s.transfers_frozen = freeze;
-   });
+   cf.transfers_frozen = freeze;
+   configtable.set (cf, st.issuer );
 }
 
 void token::resetram( const name& table, const string& scope, const uint32_t& limit )
@@ -447,6 +444,9 @@ void token::resetram( const name& table, const string& scope, const uint32_t& li
       for( auto itr = stakestable.begin(); itr != stakestable.end() && counter<limit; counter++ ) {
          itr = stakestable.erase(itr);
       }
+   } else if( table == "configs"_n ) {
+      configs configtable( get_self(), scope_raw );
+      configtable.remove();
    } else {
      // generic erase for tables with no secondary indices
      auto it = internal_use_do_not_use::db_lowerbound_i64(_self.value, scope_raw, table.value, 0);
