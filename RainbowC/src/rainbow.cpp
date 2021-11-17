@@ -98,6 +98,7 @@ void token::approve( const symbol_code& symbolcode, const bool& reject_and_clear
     const auto& st = statstable.get( sym_code_raw, "token with symbol does not exist" );
     configs configtable( get_self(), sym_code_raw );
     auto cf = configtable.get();
+    displays displaytable( get_self(), sym_code_raw );
     if( reject_and_clear ) {
        check( st.supply.amount == 0, "cannot clear with outstanding tokens" );
        stakes stakestable( get_self(), sym_code_raw );
@@ -105,6 +106,7 @@ void token::approve( const symbol_code& symbolcode, const bool& reject_and_clear
           itr = stakestable.erase(itr);
        }
        configtable.remove( );
+       displaytable.remove( );
        statstable.erase( statstable.iterator_to(st) );
     } else {
        cf.approved = true;
@@ -217,9 +219,9 @@ void token::setdisplay( const name&         issuer,
     check( token_name.size() <= 32, "name has more than 32 bytes" );
     const string *url_list[] = { &logo, &logo_lg, &web_link, &background };
     for( const string* s : url_list ) {
-       check( s->size() <= 128, "url string has more than 128 bytes" );
+       check( s->size() <= 256, "url string has more than 256 bytes" );
     }
-    check( json_meta.size() <= 512, "json metadata has more than 512 bytes" );
+    check( json_meta.size() <= 1024, "json metadata has more than 1024 bytes" );
     dt.name        = token_name;
     dt.logo        = logo;
     dt.logo_lg     = logo_lg;
@@ -460,7 +462,7 @@ void token::resetram( const name& table, const string& scope, const uint32_t& li
    require_auth2( get_self().value, "active"_n.value );
    uint64_t scope_raw;
    check( !scope.empty(), "scope string is empty" );
-   if( scope.length() <= 7 ) {
+   if( isupper(scope.c_str()[0]) ) {
       symbol_code code(scope);
       check( code.is_valid(), "invalid symbol code" );
       scope_raw = code.raw();

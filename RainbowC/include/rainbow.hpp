@@ -137,7 +137,7 @@ namespace eosio {
           *
           * @pre Token symbol must have already been created by this issuer
           * @pre String parameters must be within length limits
-          *       name < 32 char, json_meta < 512 char, all others < 128 char
+          *       name < 32 char, json_meta < 1024 char, all others < 256 char
           */
          [[eosio::action]]
          void setdisplay( const name&         issuer,
@@ -331,7 +331,9 @@ namespace eosio {
          typedef eosio::multi_index< "accounts"_n, account > accounts;
          typedef eosio::multi_index< "stat"_n, currency_stats > stats;
          typedef eosio::singleton< "configs"_n, currency_config > configs;
+         typedef eosio::multi_index< "configs"_n, currency_config >  dump_for_config;
          typedef eosio::singleton< "displays"_n, currency_display > displays;
+         typedef eosio::multi_index< "displays"_n, currency_display >  dump_for_display;
          typedef eosio::multi_index
             < "stakes"_n, stake_stats, indexed_by
                < "staketoken"_n,
