@@ -3,12 +3,13 @@
 ---
 spec_version: "0.2.0"
 title: Approve Created Token
-summary: 'Approve characteristics of a newly created token'
+summary: 'Approve characteristics of a newly created token, or reject it'
 icon: @ICON_BASE_URL@/@TOKEN_ICON_URI@
 ---
 
 The contract owner allows the issuer to begin issuing tokens under a newly created {{symbol_to_symbol_code symbol}}.
 Once approved, the issuer may modify the token configuration without any further approval action required.
+If {{reject_and_clear}} is true, and there are no outstanding issued tokens, the token is deleted.
 
 <<h1 class="contract">close</h1>
 
@@ -78,7 +79,7 @@ RAM will be deducted from the token manager (issuer) resources to create the nec
 
 This action does not allow the total quantity to exceed the max allowed supply of the token.
 
-A proportionate number of staking tokens are transferred from issuer's account to the stake_to escrow account for each stake listed in the stake stats table.
+A proportionate number of staking tokens are transferred from issuer's account to the stake_to escrow account for each non-deferred stake listed in the stake stats table.
 
 <h1 class="contract">open</h1>
 
@@ -123,6 +124,19 @@ A proportionate number of staking tokens are transferred from the stake_to escro
 {{#if memo}} There is a memo attached to the action stating:
 {{memo}}
 {{/if}}
+
+<h1 class="contract">setdisplay</h1>
+
+---
+spec_version: "0.2.0"
+title: Create or Update Display Metadata for a Token
+summary: 'Set display metadata'
+icon: @ICON_BASE_URL@/@TOKEN_ICON_URI@
+---
+
+{{issuer}} agrees to associate a set of display metadata with an existing token {{symbol_code}}. 
+
+RAM will deducted from {{issuer}}’s resources to update the necessary records.
 
 <h1 class="contract">setstake</h1>
 

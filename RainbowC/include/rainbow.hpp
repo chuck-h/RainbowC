@@ -2,6 +2,7 @@
 
 #include <eosio/asset.hpp>
 #include <eosio/eosio.hpp>
+#include <eosio/singleton.hpp>
 #include <eosio/system.hpp>
 
 #include <string>
@@ -78,15 +79,17 @@ namespace eosio {
 
 
          /**
-          * By this action the contract owner approves the creation of the token. Until
-          * this approval, no tokens may be issued.
+          * By this action the contract owner approves or rejects the creation of the token. Until
+          * this approval, no tokens may be issued. If rejected, and no issued tokens are outstanding,
+          * the table entries for this token are deleted.
           *
           * @param symbolcode - the symbol_code of the token to execute the close action for.
+          * @param reject_and_clear - if this flag is true, delete token; if false, approve creation
           *
           * @pre The symbol must have been created.
           */
          [[eosio::action]]
-         void approve( const symbol_code& symbolcode );
+         void approve( const symbol_code& symbolcode, const bool& reject_and_clear );
 
 
          /**
@@ -102,6 +105,8 @@ namespace eosio {
           * @param stake_token_contract - the staked token contract account (e.g. token.seeds),
           * @param stake_to - the escrow account where stake is held, or `deletestake`
           *   to remove a row from the stakes table
+          * @param deferred - staking relationship does not transfer stake to escrow.
+          * @param proportional - redeem by proportion of escrow rather than by staking ratio.
           * @param memo - the memo string to accompany the transaction.
           *
           * @pre Token symbol must have already been created by this issuer
@@ -117,9 +122,37 @@ namespace eosio {
                         const asset&  stake_per_bucket,
                         const name&   stake_token_contract,
                         const name&   stake_to,
+                        const bool&   deferred,
+                        const bool&   proportional,
                         const string& memo);
+
          /**
-          *  This action issues a `quantity` of tokens to the issuer account.
+          * Allows `issuer` account to create or update display metadata for a token. All fields
+          * except `name` and `json_meta` are expected to be urls. Issuer pays for RAM.
+          * The currency_display table is intended for apps to access (e.g. via nodeos chain API).
+          *
+          * @param issuer - the account that created the token,
+          * @param symbol_code - the token,
+          * @param memo - the memo string to accompany the transaction.
+          *
+          * @pre Token symbol must have already been created by this issuer
+          * @pre String parameters must be within length limits
+          *       name < 32 char, json_meta < 1024 char, all others < 256 char
+          */
+         [[eosio::action]]
+         void setdisplay( const name&         issuer,
+                          const symbol_code&  symbolcode,
+                          const string&       name,
+                          const string&       logo,
+                          const string&       logo_lg,
+                          const string&       web_link,
+                          const string&       background,
+                          const string&       json_meta
+         );
+
+         /**
+          *  This action issues a `quantity` of tokens to the issuer account, and transfers
+          *  a proportional amount of stake to escrow if staking is configured.
           *
           * @param to - the account to issue tokens to, it must be the same as the issuer,
           * @param quantity - the amount of tokens to be issued,
@@ -232,6 +265,7 @@ namespace eosio {
          using create_action = eosio::action_wrapper<"create"_n, &token::create>;
          using approve_action = eosio::action_wrapper<"approve"_n, &token::approve>;
          using setstake_action = eosio::action_wrapper<"setstake"_n, &token::setstake>;
+         using setdisplay_action = eosio::action_wrapper<"setdisplay"_n, &token::setdisplay>;
          using issue_action = eosio::action_wrapper<"issue"_n, &token::issue>;
          using retire_action = eosio::action_wrapper<"retire"_n, &token::retire>;
          using transfer_action = eosio::action_wrapper<"transfer"_n, &token::transfer>;
@@ -243,13 +277,14 @@ namespace eosio {
          const name allowallacct = "allowallacct"_n;
          const name deletestakeacct = "deletestake"_n;
          const int max_stake_count = 8; // don't use too much cpu time to complete transaction
-         struct [[eosio::table]] account {
+
+         struct [[eosio::table]] account { // scoped on account name
             asset    balance;
 
             uint64_t primary_key()const { return balance.symbol.code().raw(); }
          };
 
-         struct [[eosio::table]] currency_stats {
+         struct [[eosio::table]] currency_stats {  // scoped on token symbol code
             asset    supply;
             asset    max_supply;
             name     issuer;
@@ -257,7 +292,7 @@ namespace eosio {
             uint64_t primary_key()const { return supply.symbol.code().raw(); }
          };
 
-         struct [[eosio::table]] currency_config {
+         struct [[eosio::table]] currency_config {  // scoped on token symbol code
             name       membership_mgr;
             name       withdrawal_mgr;
             name       withdraw_to;
@@ -266,9 +301,17 @@ namespace eosio {
             time_point config_locked_until;
             bool       transfers_frozen;
             bool       approved;
-
-            uint64_t primary_key()const { return 0; } // single row per scope
          };
+
+         struct [[eosio::table]] currency_display {  // scoped on token symbol code
+            string     name;
+            string     logo;
+            string     logo_lg;
+            string     web_link;
+            string     background;
+            string     json_meta;
+         };
+
 
          struct [[eosio::table]] stake_stats {
             uint64_t index;
@@ -276,6 +319,8 @@ namespace eosio {
             asset    stake_per_bucket;
             name     stake_token_contract;
             name     stake_to;
+            bool     deferred;
+            bool     proportional;
 
             uint64_t primary_key()const { return index; };
             uint128_t by_secondary() const {
@@ -285,7 +330,10 @@ namespace eosio {
 
          typedef eosio::multi_index< "accounts"_n, account > accounts;
          typedef eosio::multi_index< "stat"_n, currency_stats > stats;
-         typedef eosio::multi_index< "configs"_n, currency_config > configs;
+         typedef eosio::singleton< "configs"_n, currency_config > configs;
+         typedef eosio::multi_index< "configs"_n, currency_config >  dump_for_config;
+         typedef eosio::singleton< "displays"_n, currency_display > displays;
+         typedef eosio::multi_index< "displays"_n, currency_display >  dump_for_display;
          typedef eosio::multi_index
             < "stakes"_n, stake_stats, indexed_by
                < "staketoken"_n,
@@ -295,10 +343,10 @@ namespace eosio {
 
          void sub_balance( const name& owner, const asset& value );
          void add_balance( const name& owner, const asset& value, const name& ram_payer );
-         void stake_all( const currency_stats st, const uint64_t amount );
-         void unstake_all( const currency_stats st, const name& owner, const uint64_t amount );
-         void stake_one( const currency_stats st, const stake_stats sk, const uint64_t amount );
-         void unstake_one( const currency_stats st, const stake_stats sk, const name& owner, const uint64_t amount );
+         void stake_all( const name& owner, const asset& quantity );
+         void unstake_all( const name& owner, const asset& quantity );
+         void stake_one( const stake_stats& sk, const name& owner, const asset& quantity );
+         void unstake_one( const stake_stats& sk, const name& owner, const asset& quantity );
  
    };
 

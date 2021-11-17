@@ -42,7 +42,7 @@ void token::create( const name&   issuer,
        // token exists
        const auto& st = *existing;
        configs configtable( get_self(), sym.code().raw() );
-       const auto& cf = *configtable.begin();
+       auto cf = configtable.get();
        check( cf.config_locked_until.time_since_epoch() < current_time_point().time_since_epoch(),
               "token reconfiguration is locked" );
        check( st.issuer == issuer, "mismatched issuer account" );
@@ -58,14 +58,13 @@ void token::create( const name&   issuer,
           s.max_supply    = maximum_supply;
           s.issuer        = issuer;
        });
-       configtable.modify (cf, issuer, [&]( auto& s ) {
-          s.membership_mgr = membership_mgr;
-          s.withdrawal_mgr = withdrawal_mgr;
-          s.withdraw_to   = withdraw_to;
-          s.freeze_mgr    = freeze_mgr;
-          s.redeem_locked_until = redeem_locked_until;
-          s.config_locked_until = config_locked_until;
-       });
+       cf.membership_mgr = membership_mgr;
+       cf.withdrawal_mgr = withdrawal_mgr;
+       cf.withdraw_to   = withdraw_to;
+       cf.freeze_mgr    = freeze_mgr;
+       cf.redeem_locked_until = redeem_locked_until;
+       cf.config_locked_until = config_locked_until;
+       configtable.set( cf, issuer );
     return;
     }
     // new token
@@ -75,29 +74,45 @@ void token::create( const name&   issuer,
        s.issuer        = issuer;
     });
     configs configtable( get_self(), sym.code().raw() );
-    configtable.emplace( issuer, [&]( auto& s ) {
-       s.membership_mgr = membership_mgr;
-       s.withdrawal_mgr = withdrawal_mgr;
-       s.withdraw_to   = withdraw_to;
-       s.freeze_mgr    = freeze_mgr;
-       s.redeem_locked_until = redeem_locked_until;
-       s.config_locked_until = config_locked_until;
-       s.transfers_frozen = false;
-       s.approved      = false;
-
-    });
+    currency_config new_config{
+       .membership_mgr = membership_mgr,
+       .withdrawal_mgr = withdrawal_mgr,
+       .withdraw_to   = withdraw_to,
+       .freeze_mgr    = freeze_mgr,
+       .redeem_locked_until = redeem_locked_until,
+       .config_locked_until = config_locked_until,
+       .transfers_frozen = false,
+       .approved      = false
+    };
+    configtable.set( new_config, issuer );
+    displays displaytable( get_self(), sym.code().raw() );
+    currency_display new_display{ "", "", "", "", "", "" };
+    displaytable.set( new_display, issuer );
 }
 
-void token::approve( const symbol_code& symbolcode )
+void token::approve( const symbol_code& symbolcode, const bool& reject_and_clear )
 {
     require_auth( get_self() );
-    stats statstable( get_self(), symbolcode.raw() );
-    const auto& st = statstable.get( symbolcode.raw(), "token with symbol does not exist" );
-    configs configtable( get_self(), symbolcode.raw() );
-    const auto& cf = *configtable.begin();
-    configtable.modify (cf, st.issuer, [&]( auto& s ) {
-       s.approved    = true;
-    });
+    auto sym_code_raw = symbolcode.raw();
+    stats statstable( get_self(), sym_code_raw );
+    const auto& st = statstable.get( sym_code_raw, "token with symbol does not exist" );
+    configs configtable( get_self(), sym_code_raw );
+    auto cf = configtable.get();
+    displays displaytable( get_self(), sym_code_raw );
+    if( reject_and_clear ) {
+       check( st.supply.amount == 0, "cannot clear with outstanding tokens" );
+       stakes stakestable( get_self(), sym_code_raw );
+       for( auto itr = stakestable.begin(); itr != stakestable.end(); ) {
+          itr = stakestable.erase(itr);
+       }
+       configtable.remove( );
+       displaytable.remove( );
+       statstable.erase( statstable.iterator_to(st) );
+    } else {
+       cf.approved = true;
+       configtable.set (cf, st.issuer );
+    }
+
 }
 
 void token::setstake( const name&   issuer,
@@ -105,6 +120,8 @@ void token::setstake( const name&   issuer,
                       const asset&  stake_per_bucket,
                       const name&   stake_token_contract,
                       const name&   stake_to,
+                      const bool&   deferred,
+                      const bool&   proportional,
                       const string& memo)
 {
     require_auth( issuer );
@@ -127,7 +144,7 @@ void token::setstake( const name&   issuer,
     stats statstable( get_self(), sym_code_raw );
     const auto& st = statstable.get( sym_code_raw, "token with symbol does not exist" );
     configs configtable( get_self(), sym_code_raw );
-    const auto& cf = *configtable.begin();
+    const auto& cf = configtable.get();
     check( cf.config_locked_until.time_since_epoch() < current_time_point().time_since_epoch(),
            "token reconfiguration is locked" );
     check( st.issuer == issuer, "mismatched issuer account" );
@@ -139,12 +156,14 @@ void token::setstake( const name&   issuer,
        const auto& sk = *existing;
        bool restaking = token_bucket != sk.token_bucket ||
                         stake_per_bucket != sk.stake_per_bucket ||
-                        stake_to != sk.stake_to;
+                        stake_to != sk.stake_to ||
+                        deferred != sk.deferred ||
+                        proportional != sk.proportional;
        bool destaking = stake_to == sk.stake_to &&
                         stake_per_bucket.amount == 0;
        if( st.supply.amount != 0 ) {
-          if( destaking ) {
-             unstake_one( st, sk, st.issuer, st.supply.amount );
+          if( destaking && !deferred) {
+             unstake_one( sk, st.issuer, st.supply );
           } else if ( restaking ) {
              check( sk.stake_per_bucket.amount == 0, "must destake before restaking");
              if( stake_to == deletestakeacct ) {
@@ -157,9 +176,11 @@ void token::setstake( const name&   issuer,
           s.stake_per_bucket = stake_per_bucket;
           s.stake_token_contract = stake_token_contract;
           s.stake_to = stake_to;
+          s.deferred = deferred;
+          s.proportional = proportional;
        });
-       if( restaking ) {
-          stake_one( st, sk, st.supply.amount );
+       if( restaking && !deferred ) {
+          stake_one( sk, st.issuer, st.supply );
        }
        return;
     }
@@ -173,13 +194,42 @@ void token::setstake( const name&   issuer,
        s.stake_per_bucket      = stake_per_bucket;
        s.stake_token_contract = stake_token_contract;
        s.stake_to             = stake_to;
+       s.deferred             = deferred;
+       s.proportional         = proportional;
     });
     if( st.supply.amount != 0 ) {
-       stake_one( st, sk, st.supply.amount );
+       stake_one( sk, st.issuer, st.supply );
     }
 
 }
 
+void token::setdisplay( const name&         issuer,
+                        const symbol_code&  symbolcode,
+                        const string&       token_name,
+                        const string&       logo,
+                        const string&       logo_lg,
+                        const string&       web_link,
+                        const string&       background,
+                        const string&       json_meta )
+{
+    require_auth( issuer );
+    auto sym_code_raw = symbolcode.raw();
+    displays displaytable( get_self(), sym_code_raw );
+    auto dt = displaytable.get();
+    check( token_name.size() <= 32, "name has more than 32 bytes" );
+    const string *url_list[] = { &logo, &logo_lg, &web_link, &background };
+    for( const string* s : url_list ) {
+       check( s->size() <= 256, "url string has more than 256 bytes" );
+    }
+    check( json_meta.size() <= 1024, "json metadata has more than 1024 bytes" );
+    dt.name        = token_name;
+    dt.logo        = logo;
+    dt.logo_lg     = logo_lg;
+    dt.web_link    = web_link;
+    dt.background  = background;
+    dt.json_meta   = json_meta;
+    displaytable.set( dt, issuer );
+}
 
 void token::issue( const asset& quantity, const string& memo )
 {
@@ -190,7 +240,7 @@ void token::issue( const asset& quantity, const string& memo )
     stats statstable( get_self(), sym.code().raw() );
     const auto& st = statstable.get( sym.code().raw(), "token with symbol does not exist, create token before issue" );
     configs configtable( get_self(), sym.code().raw() );
-    const auto& cf = *configtable.begin();
+    const auto& cf = configtable.get();
     check( cf.approved, "cannot issue until token is approved" );
     require_auth( st.issuer );
     check( quantity.is_valid(), "invalid quantity" );
@@ -203,20 +253,19 @@ void token::issue( const asset& quantity, const string& memo )
        s.supply += quantity;
     });
 
-    stake_all( st, quantity.amount );
+    stake_all( st.issuer, quantity );
     add_balance( st.issuer, quantity, st.issuer );
 }
 
-void token::stake_one( const currency_stats st, const stake_stats sk, const uint64_t amount ) {
+void token::stake_one( const stake_stats& sk, const name& owner, const asset& quantity ) {
     if( sk.stake_per_bucket.amount > 0 ) {
        asset stake_quantity = sk.stake_per_bucket;
-       stake_quantity.amount = (int64_t)((int128_t)amount*sk.stake_per_bucket.amount/sk.token_bucket.amount);
-       // TBD: are there potential exploits based on rounding inaccuracy?
+       stake_quantity.amount = (int64_t)((int128_t)quantity.amount*sk.stake_per_bucket.amount/sk.token_bucket.amount);
        action(
-          permission_level{st.issuer,"active"_n},
+          permission_level{owner, "active"_n},
           sk.stake_token_contract,
           "transfer"_n,
-          std::make_tuple(st.issuer,
+          std::make_tuple(owner,
                           sk.stake_to,
                           stake_quantity,
                           std::string("rainbow stake"))
@@ -224,18 +273,21 @@ void token::stake_one( const currency_stats st, const stake_stats sk, const uint
     }
 }
 
-void token::stake_all( const currency_stats st, const uint64_t amount ) {
-    stakes stakestable( get_self(), st.supply.symbol.code().raw() );
+void token::stake_all( const name& owner, const asset& quantity ) {
+    stakes stakestable( get_self(), quantity.symbol.code().raw() );
     for( auto itr = stakestable.begin(); itr != stakestable.end(); itr++ ) {
-       stake_one( st, *itr, amount );
+       if( !itr->deferred ) {
+          stake_one( *itr, owner, quantity );
+       }
     }
 }
 
-void token::unstake_one( const currency_stats st, const stake_stats sk, const name& owner, const uint64_t amount ) {
+void token::unstake_one( const stake_stats& sk, const name& owner, const asset& quantity ) {
     if( sk.stake_per_bucket.amount > 0 ) {
        asset stake_quantity = sk.stake_per_bucket;
-       stake_quantity.amount = (int64_t)((int128_t)amount*sk.stake_per_bucket.amount/sk.token_bucket.amount);
-       // TBD: are there potential exploits based on rounding inaccuracy?
+       stake_quantity.amount = (int64_t)((int128_t)quantity.amount*sk.stake_per_bucket.amount/sk.token_bucket.amount);
+       // TODO (a) if proportional, compute unstake amount based on current escrow balance and note in memo string
+       //      (b) if not proportional, check that escrow is fully funded
        action(
           permission_level{sk.stake_to,"active"_n},
           sk.stake_token_contract,
@@ -247,10 +299,10 @@ void token::unstake_one( const currency_stats st, const stake_stats sk, const na
        ).send();
     }
 }
-void token::unstake_all( const currency_stats st, const name& owner, const uint64_t amount ) {
-    stakes stakestable( get_self(), st.supply.symbol.code().raw() );
+void token::unstake_all( const name& owner, const asset& quantity ) {
+    stakes stakestable( get_self(), quantity.symbol.code().raw() );
     for( auto itr = stakestable.begin(); itr != stakestable.end(); itr++ ) {
-       unstake_one( st, *itr, owner, amount );
+       unstake_one( *itr, owner, quantity );
     }
 }
 
@@ -263,7 +315,7 @@ void token::retire( const name& owner, const asset& quantity, const string& memo
     stats statstable( get_self(), sym.code().raw() );
     const auto& st = statstable.get( sym.code().raw(), "token with symbol does not exist" );
     configs configtable( get_self(), sym.code().raw() );
-    const auto& cf = *configtable.begin();
+    const auto& cf = configtable.get();
     if( cf.redeem_locked_until.time_since_epoch() < current_time_point().time_since_epoch() ) {
        check( !cf.transfers_frozen, "transfers are frozen");
     } else {
@@ -280,7 +332,7 @@ void token::retire( const name& owner, const asset& quantity, const string& memo
     });
 
     sub_balance( owner, quantity );
-    unstake_all( st, owner, quantity.amount );
+    unstake_all( owner, quantity );
 }
 
 void token::transfer( const name&    from,
@@ -295,7 +347,7 @@ void token::transfer( const name&    from,
     stats statstable( get_self(), sym_code_raw );
     const auto& st = statstable.get( sym_code_raw );
     configs configtable( get_self(), sym_code_raw );
-    const auto& cf = *configtable.begin();
+    const auto& cf = configtable.get();
 
     if( cf.membership_mgr != allowallacct ) {
        accounts to_acnts( get_self(), to.value );
@@ -362,7 +414,7 @@ void token::open( const name& owner, const symbol_code& symbolcode, const name& 
    stats statstable( get_self(), sym_code_raw );
    const auto& st = statstable.get( sym_code_raw, "symbol does not exist" );
    configs configtable( get_self(), sym_code_raw );
-   const auto& cf = *configtable.begin();
+   const auto& cf = configtable.get();
    if( cf.membership_mgr != allowallacct) {
       require_auth( cf.membership_mgr );
    }
@@ -381,7 +433,7 @@ void token::close( const name& owner, const symbol_code& symbolcode )
    stats statstable( get_self(), sym_code_raw );
    const auto& st = statstable.get( sym_code_raw, "symbol does not exist" );
    configs configtable( get_self(), sym_code_raw );
-   const auto& cf = *configtable.begin();
+   const auto& cf = configtable.get();
    if( cf.membership_mgr == allowallacct || !has_auth( cf.membership_mgr ) ) {
       require_auth( owner );
    }
@@ -398,12 +450,11 @@ void token::freeze( const symbol_code& symbolcode, const bool& freeze, const str
    stats statstable( get_self(), sym_code_raw );
    const auto& st = statstable.get( sym_code_raw, "symbol does not exist" );
    configs configtable( get_self(), sym_code_raw );
-   const auto& cf = *configtable.begin();
+   auto cf = configtable.get();
    check( memo.size() <= 256, "memo has more than 256 bytes" );
    require_auth( cf.freeze_mgr );
-   configtable.modify (cf, same_payer, [&]( auto& s ) {
-      s.transfers_frozen = freeze;
-   });
+   cf.transfers_frozen = freeze;
+   configtable.set (cf, st.issuer );
 }
 
 void token::resetram( const name& table, const string& scope, const uint32_t& limit )
@@ -411,7 +462,7 @@ void token::resetram( const name& table, const string& scope, const uint32_t& li
    require_auth2( get_self().value, "active"_n.value );
    uint64_t scope_raw;
    check( !scope.empty(), "scope string is empty" );
-   if( scope.length() <= 7 ) {
+   if( isupper(scope.c_str()[0]) ) {
       symbol_code code(scope);
       check( code.is_valid(), "invalid symbol code" );
       scope_raw = code.raw();
@@ -425,6 +476,9 @@ void token::resetram( const name& table, const string& scope, const uint32_t& li
       for( auto itr = stakestable.begin(); itr != stakestable.end() && counter<limit; counter++ ) {
          itr = stakestable.erase(itr);
       }
+   } else if( table == "configs"_n ) {
+      configs configtable( get_self(), scope_raw );
+      configtable.remove();
    } else {
      // generic erase for tables with no secondary indices
      auto it = internal_use_do_not_use::db_lowerbound_i64(_self.value, scope_raw, table.value, 0);
