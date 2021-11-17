@@ -125,6 +125,19 @@ A proportionate number of staking tokens are transferred from the stake_to escro
 {{memo}}
 {{/if}}
 
+<h1 class="contract">setdisplay</h1>
+
+---
+spec_version: "0.2.0"
+title: Create or Update Display Metadata for a Token
+summary: 'Set display metadata'
+icon: @ICON_BASE_URL@/@TOKEN_ICON_URI@
+---
+
+{{issuer}} agrees to associate a set of display metadata with an existing token {{symbol_code}}. 
+
+RAM will deducted from {{issuer}}’s resources to update the necessary records.
+
 <h1 class="contract">setstake</h1>
 
 ---

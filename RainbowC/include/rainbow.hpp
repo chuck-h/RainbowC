@@ -125,6 +125,31 @@ namespace eosio {
                         const bool&   deferred,
                         const bool&   proportional,
                         const string& memo);
+
+         /**
+          * Allows `issuer` account to create or update display metadata for a token. All fields
+          * except `name` and `json_meta` are expected to be urls. Issuer pays for RAM.
+          * The currency_display table is intended for apps to access (e.g. via nodeos chain API).
+          *
+          * @param issuer - the account that created the token,
+          * @param symbol_code - the token,
+          * @param memo - the memo string to accompany the transaction.
+          *
+          * @pre Token symbol must have already been created by this issuer
+          * @pre String parameters must be within length limits
+          *       name < 32 char, json_meta < 512 char, all others < 128 char
+          */
+         [[eosio::action]]
+         void setdisplay( const name&         issuer,
+                          const symbol_code&  symbolcode,
+                          const string&       name,
+                          const string&       logo,
+                          const string&       logo_lg,
+                          const string&       web_link,
+                          const string&       background,
+                          const string&       json_meta
+         );
+
          /**
           *  This action issues a `quantity` of tokens to the issuer account, and transfers
           *  a proportional amount of stake to escrow if staking is configured.
@@ -240,6 +265,7 @@ namespace eosio {
          using create_action = eosio::action_wrapper<"create"_n, &token::create>;
          using approve_action = eosio::action_wrapper<"approve"_n, &token::approve>;
          using setstake_action = eosio::action_wrapper<"setstake"_n, &token::setstake>;
+         using setdisplay_action = eosio::action_wrapper<"setdisplay"_n, &token::setdisplay>;
          using issue_action = eosio::action_wrapper<"issue"_n, &token::issue>;
          using retire_action = eosio::action_wrapper<"retire"_n, &token::retire>;
          using transfer_action = eosio::action_wrapper<"transfer"_n, &token::transfer>;
@@ -251,13 +277,14 @@ namespace eosio {
          const name allowallacct = "allowallacct"_n;
          const name deletestakeacct = "deletestake"_n;
          const int max_stake_count = 8; // don't use too much cpu time to complete transaction
-         struct [[eosio::table]] account {
+
+         struct [[eosio::table]] account { // scoped on account name
             asset    balance;
 
             uint64_t primary_key()const { return balance.symbol.code().raw(); }
          };
 
-         struct [[eosio::table]] currency_stats {
+         struct [[eosio::table]] currency_stats {  // scoped on token symbol code
             asset    supply;
             asset    max_supply;
             name     issuer;
@@ -265,7 +292,7 @@ namespace eosio {
             uint64_t primary_key()const { return supply.symbol.code().raw(); }
          };
 
-         struct [[eosio::table]] currency_config {
+         struct [[eosio::table]] currency_config {  // scoped on token symbol code
             name       membership_mgr;
             name       withdrawal_mgr;
             name       withdraw_to;
@@ -276,7 +303,15 @@ namespace eosio {
             bool       approved;
          };
 
-         // TODO add another symbol_code-scoped singleton for logo info
+         struct [[eosio::table]] currency_display {  // scoped on token symbol code
+            string     name;
+            string     logo;
+            string     logo_lg;
+            string     web_link;
+            string     background;
+            string     json_meta;
+         };
+
 
          struct [[eosio::table]] stake_stats {
             uint64_t index;
@@ -296,6 +331,7 @@ namespace eosio {
          typedef eosio::multi_index< "accounts"_n, account > accounts;
          typedef eosio::multi_index< "stat"_n, currency_stats > stats;
          typedef eosio::singleton< "configs"_n, currency_config > configs;
+         typedef eosio::singleton< "displays"_n, currency_display > displays;
          typedef eosio::multi_index
             < "stakes"_n, stake_stats, indexed_by
                < "staketoken"_n,

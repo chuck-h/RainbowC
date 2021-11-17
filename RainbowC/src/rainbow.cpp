@@ -85,6 +85,9 @@ void token::create( const name&   issuer,
        .approved      = false
     };
     configtable.set( new_config, issuer );
+    displays displaytable( get_self(), sym.code().raw() );
+    currency_display new_display{ "", "", "", "", "", "" };
+    displaytable.set( new_display, issuer );
 }
 
 void token::approve( const symbol_code& symbolcode, const bool& reject_and_clear )
@@ -198,6 +201,33 @@ void token::setstake( const name&   issuer,
 
 }
 
+void token::setdisplay( const name&         issuer,
+                        const symbol_code&  symbolcode,
+                        const string&       token_name,
+                        const string&       logo,
+                        const string&       logo_lg,
+                        const string&       web_link,
+                        const string&       background,
+                        const string&       json_meta )
+{
+    require_auth( issuer );
+    auto sym_code_raw = symbolcode.raw();
+    displays displaytable( get_self(), sym_code_raw );
+    auto dt = displaytable.get();
+    check( token_name.size() <= 32, "name has more than 32 bytes" );
+    const string *url_list[] = { &logo, &logo_lg, &web_link, &background };
+    for( const string* s : url_list ) {
+       check( s->size() <= 128, "url string has more than 128 bytes" );
+    }
+    check( json_meta.size() <= 512, "json metadata has more than 512 bytes" );
+    dt.name        = token_name;
+    dt.logo        = logo;
+    dt.logo_lg     = logo_lg;
+    dt.web_link    = web_link;
+    dt.background  = background;
+    dt.json_meta   = json_meta;
+    displaytable.set( dt, issuer );
+}
 
 void token::issue( const asset& quantity, const string& memo )
 {
