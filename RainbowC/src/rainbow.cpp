@@ -161,14 +161,12 @@ void token::setstake( const name&   issuer,
                         proportional != sk.proportional;
        bool destaking = stake_to == sk.stake_to &&
                         stake_per_bucket.amount == 0;
-       if( st.supply.amount != 0 ) {
-          if( destaking && !deferred) {
-             unstake_one( sk, st.issuer, st.supply );
-          } else if ( restaking ) {
-             check( sk.stake_per_bucket.amount == 0, "must destake before restaking");
-             if( stake_to == deletestakeacct ) {
-                stakestable.erase( sk );
-             }
+       if( destaking && !deferred && st.supply.amount != 0 ) {
+          unstake_one( sk, st.issuer, st.supply );
+       } else if ( restaking ) {
+          check( sk.stake_per_bucket.amount == 0, "must destake before restaking");
+          if( stake_to == deletestakeacct ) {
+             stakestable.erase( sk );
           }
        }
        stakestable.modify (sk, issuer, [&]( auto& s ) {
@@ -179,7 +177,7 @@ void token::setstake( const name&   issuer,
           s.deferred = deferred;
           s.proportional = proportional;
        });
-       if( restaking && !deferred ) {
+       if( restaking && !deferred && st.supply.amount != 0 ) {
           stake_one( sk, st.issuer, st.supply );
        }
        return;
