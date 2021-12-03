@@ -99,13 +99,14 @@ namespace eosio {
           * with the specified characteristics. If a token of this symbol and issuer does exist and update
           * is permitted, the characteristics are updated.
           *
-          * @param issuer - the account that created the token,
           * @param token_bucket - a reference quantity of the token,
           * @param stake_per_bucket - the number of stake tokens (e.g. Seeds) staked per "bucket" of tokens,
           * @param stake_token_contract - the staked token contract account (e.g. token.seeds),
           * @param stake_to - the escrow account where stake is held, or `deletestake`
           *   to remove a row from the stakes table
-          * @param deferred - staking relationship does not transfer stake to escrow.
+          * // TODO replace encoded deferral with explicit lock_id and deferral contract name fields
+          * @param deferral - if == 0, no deferral, stake is in liquid tokens; otherwise
+          *   a concatenation of a lock_id with the deferral contract (e.g. escrow.seeds) holding the lock
           * @param proportional - redeem by proportion of escrow rather than by staking ratio.
           * @param memo - the memo string to accompany the transaction.
           *
@@ -117,14 +118,13 @@ namespace eosio {
           * @pre stake_to active permissions must include rainbowcontract@eosio.code
           */
          [[eosio::action]]
-         void setstake( const name&   issuer,
-                        const asset&  token_bucket,
-                        const asset&  stake_per_bucket,
-                        const name&   stake_token_contract,
-                        const name&   stake_to,
-                        const bool&   deferred,
-                        const bool&   proportional,
-                        const string& memo);
+         void setstake( const asset&      token_bucket,
+                        const asset&      stake_per_bucket,
+                        const name&       stake_token_contract,
+                        const name&       stake_to,
+                        const uint128_t&  deferral,
+                        const bool&       proportional,
+                        const string&     memo);
 
          /**
           * Allows `issuer` account to create or update display metadata for a token. All fields
@@ -140,8 +140,7 @@ namespace eosio {
           *       name < 32 char, json_meta < 1024 char, all others < 256 char
           */
          [[eosio::action]]
-         void setdisplay( const name&         issuer,
-                          const symbol_code&  symbolcode,
+         void setdisplay( const symbol_code&  symbolcode,
                           const string&       name,
                           const string&       logo,
                           const string&       logo_lg,
@@ -248,6 +247,20 @@ namespace eosio {
          [[eosio::action]]
          void resetram( const name& table, const string& scope, const uint32_t& limit = 10 );
 
+         /**
+          * This action defines a deferred stake (assumes escrow.seeds deferral contract)
+          *
+          * @param symbolcode - rainbow token symbol
+          * @param deferral_contract - contract holding deferred staked tokens
+          * @param parent_lock_id - original record id in deferral contract
+          *
+          * @pre 
+          */
+         [[eosio::action]]
+         void defdeferral( const symbol_code&  symbolcode,
+                           const name&         deferral_contract,
+                           const uint64_t&     parent_lock_id ) ;
+
          static asset get_supply( const name& token_contract_account, const symbol_code& sym_code )
          {
             stats statstable( token_contract_account, sym_code.raw() );
@@ -277,6 +290,7 @@ namespace eosio {
          const name allowallacct = "allowallacct"_n;
          const name deletestakeacct = "deletestake"_n;
          const int max_stake_count = 8; // don't use too much cpu time to complete transaction
+         const uint64_t no_index = static_cast<uint64_t>(-1); // flag for nonexistent defer_table link
 
          struct [[eosio::table]] account { // scoped on account name
             asset    balance;
@@ -313,18 +327,30 @@ namespace eosio {
          };
 
 
-         struct [[eosio::table]] stake_stats {
+         struct [[eosio::table]] stake_stats {  // scoped on token symbol code
             uint64_t index;
             asset    token_bucket;
             asset    stake_per_bucket;
             name     stake_token_contract;
             name     stake_to;
-            bool     deferred;
+            int64_t  deferral_index;
             bool     proportional;
 
             uint64_t primary_key()const { return index; };
             uint128_t by_secondary() const {
                return (uint128_t)stake_per_bucket.symbol.raw()<<64 | stake_token_contract.value;
+            }
+         };
+
+         struct [[eosio::table]] deferral_stats {  // scoped on token symbol code
+            uint64_t index;
+            name     deferral_contract;
+            uint64_t parent_lock_id;
+            uint64_t child_lock_id;
+
+            uint64_t primary_key()const { return index; };
+            uint128_t by_secondary() const {
+               return (uint128_t)parent_lock_id<<64 | deferral_contract.value;
             }
          };
 
@@ -340,6 +366,12 @@ namespace eosio {
                  const_mem_fun<stake_stats, uint128_t, &stake_stats::by_secondary >
                >
             > stakes;
+         typedef eosio::multi_index
+            < "deferrals"_n, deferral_stats, indexed_by
+               < "lockid"_n,
+                 const_mem_fun<deferral_stats, uint128_t, &deferral_stats::by_secondary >
+               >
+            > deferrals;
 
          void sub_balance( const name& owner, const asset& value );
          void add_balance( const name& owner, const asset& value, const name& ram_payer );
@@ -347,6 +379,28 @@ namespace eosio {
          void unstake_all( const name& owner, const asset& quantity );
          void stake_one( const stake_stats& sk, const name& owner, const asset& quantity );
          void unstake_one( const stake_stats& sk, const name& owner, const asset& quantity );
+         /**
+          * Causes ownership transfer of deferred tokens under highly restricted conditions.
+          * Works in cooperation with a separate deferred-token management contract (e.g. `escrow.seeds`)
+          * Within that contract, one locked balance is debited and the other is credited
+          * with quantity tokens.
+          *
+          * @param contract - the deferred-token management contract name,
+          * @param from_lock_id - the account to transfer from,
+          * @param to_lock_id - the account to be transferred to,
+          * @param child - the account to be transferred to,
+          * @param quantity - the quantity of tokens to be transferred,
+          * @param memo - the memo string to accompany the transaction.
+          * 
+          * @pre The contract must have been initialized to accept parent-child transfers
+          */
+         void dtransfer( const name&      contract,
+                         const uint64_t&  from_lock_id,
+                         const uint64_t&  to_lock_id,
+                         const name&      child,
+                         const asset&     quantity,
+                         const string&    memo );
+
  
    };
 

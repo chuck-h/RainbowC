@@ -115,16 +115,18 @@ void token::approve( const symbol_code& symbolcode, const bool& reject_and_clear
 
 }
 
-void token::setstake( const name&   issuer,
-                      const asset&  token_bucket,
-                      const asset&  stake_per_bucket,
-                      const name&   stake_token_contract,
-                      const name&   stake_to,
-                      const bool&   deferred,
-                      const bool&   proportional,
-                      const string& memo)
+void token::setstake( const asset&    token_bucket,
+                      const asset&    stake_per_bucket,
+                      const name&     stake_token_contract,
+                      const name&     stake_to,
+                      const uint128_t& deferral,
+                      const bool&     proportional,
+                      const string&   memo )
 {
-    require_auth( issuer );
+    auto sym_code_raw = token_bucket.symbol.code().raw();
+    stats statstable( get_self(), sym_code_raw );
+    const auto& st = statstable.get( sym_code_raw, "token with symbol does not exist" );
+    require_auth( st.issuer );
     check( memo.size() <= 256, "memo has more than 256 bytes" );
     auto stake_sym = stake_per_bucket.symbol;
     uint128_t stake_token = (uint128_t)stake_sym.raw()<<64 | stake_token_contract.value;
@@ -132,7 +134,7 @@ void token::setstake( const name&   issuer,
     check( stake_per_bucket.is_valid(), "invalid stake");
     check( stake_per_bucket.amount >= 0, "stake per token must be non-negative");
     check( is_account( stake_token_contract ), "stake token contract account does not exist");
-    accounts accountstable( stake_token_contract, issuer.value );
+    accounts accountstable( stake_token_contract, st.issuer.value );
     const auto stake_bal = accountstable.find( stake_sym.code().raw() );
     check( stake_bal != accountstable.end(), "issuer must have a stake token balance");
     check( stake_bal->balance.symbol == stake_sym, "mismatched stake token precision" );
@@ -140,28 +142,37 @@ void token::setstake( const name&   issuer,
        check( is_account( stake_to ), "stake_to account does not exist");
     }
     check( token_bucket.amount > 0, "token bucket must be > 0" );
-    auto sym_code_raw = token_bucket.symbol.code().raw();
-    stats statstable( get_self(), sym_code_raw );
-    const auto& st = statstable.get( sym_code_raw, "token with symbol does not exist" );
     configs configtable( get_self(), sym_code_raw );
     const auto& cf = configtable.get();
     check( cf.config_locked_until.time_since_epoch() < current_time_point().time_since_epoch(),
            "token reconfiguration is locked" );
-    check( st.issuer == issuer, "mismatched issuer account" );
+    deferrals defertable( get_self(), sym_code_raw);
+    uint64_t defer_idx = no_index;
+    if ( deferral ) {
+       auto lockid_index = defertable.get_index<"lockid"_n>();
+       auto defer_existing = lockid_index.find( deferral );
+       if ( defer_existing != lockid_index.end() ) {
+          const auto& df = *defer_existing;
+          defer_idx = df.index;
+          check( false, "defer unimplemented, lock_id found" );
+       } else {
+          check( false, "defer unimplemented, no lock_id" );
+       }
+    }
     stakes stakestable( get_self(), sym_code_raw );
     auto stake_token_index = stakestable.get_index<"staketoken"_n>();
     auto existing = stake_token_index.find( stake_token );
-    if( existing != stake_token_index.end()) {
+    if( existing != stake_token_index.end() ) {
        // stake token exists in stakes table
        const auto& sk = *existing;
        bool restaking = token_bucket != sk.token_bucket ||
                         stake_per_bucket != sk.stake_per_bucket ||
                         stake_to != sk.stake_to ||
-                        deferred != sk.deferred ||
+                        defer_idx != sk.deferral_index ||
                         proportional != sk.proportional;
        bool destaking = stake_to == sk.stake_to &&
                         stake_per_bucket.amount == 0;
-       if( destaking && !deferred && st.supply.amount != 0 ) {
+       if( destaking && st.supply.amount != 0 ) {
           unstake_one( sk, st.issuer, st.supply );
        } else if ( restaking ) {
           check( sk.stake_per_bucket.amount == 0, "must destake before restaking");
@@ -169,15 +180,18 @@ void token::setstake( const name&   issuer,
              stakestable.erase( sk );
           }
        }
-       stakestable.modify (sk, issuer, [&]( auto& s ) {
+       if( defer_idx != no_index ) {
+          check( false, "deferral restaking unimplemented" );
+       }
+       stakestable.modify (sk, st.issuer, [&]( auto& s ) {
           s.token_bucket = token_bucket;
           s.stake_per_bucket = stake_per_bucket;
           s.stake_token_contract = stake_token_contract;
           s.stake_to = stake_to;
-          s.deferred = deferred;
+          s.deferral_index = defer_idx;
           s.proportional = proportional;
        });
-       if( restaking && !deferred && st.supply.amount != 0 ) {
+       if( restaking && st.supply.amount != 0 ) {
           stake_one( sk, st.issuer, st.supply );
        }
        return;
@@ -186,13 +200,17 @@ void token::setstake( const name&   issuer,
     int existing_stake_count = std::distance(stakestable.cbegin(),stakestable.cend());
     check( existing_stake_count <= max_stake_count, "stake count exceeded" );
     check( stake_to != deletestakeacct, "invalid stake_to account" );
-    const auto& sk = *stakestable.emplace( issuer, [&]( auto& s ) {
+    if( defer_idx != no_index ) {
+       check( false, "deferral creation unimplemented" );
+       // TODO move defdeferral( symbolcode, deferral_contract, parent_lock_id ) functionality here
+    }
+    const auto& sk = *stakestable.emplace( st.issuer, [&]( auto& s ) {
        s.index                = stakestable.available_primary_key();
        s.token_bucket         = token_bucket;
        s.stake_per_bucket      = stake_per_bucket;
        s.stake_token_contract = stake_token_contract;
        s.stake_to             = stake_to;
-       s.deferred             = deferred;
+       s.deferral_index       = defer_idx;
        s.proportional         = proportional;
     });
     if( st.supply.amount != 0 ) {
@@ -201,8 +219,7 @@ void token::setstake( const name&   issuer,
 
 }
 
-void token::setdisplay( const name&         issuer,
-                        const symbol_code&  symbolcode,
+void token::setdisplay( const symbol_code&  symbolcode,
                         const string&       token_name,
                         const string&       logo,
                         const string&       logo_lg,
@@ -210,8 +227,10 @@ void token::setdisplay( const name&         issuer,
                         const string&       background,
                         const string&       json_meta )
 {
-    require_auth( issuer );
     auto sym_code_raw = symbolcode.raw();
+    stats statstable( get_self(), sym_code_raw );
+    const auto& st = statstable.get( sym_code_raw, "token with symbol does not exist" );
+    require_auth( st.issuer );
     displays displaytable( get_self(), sym_code_raw );
     auto dt = displaytable.get();
     check( token_name.size() <= 32, "name has more than 32 bytes" );
@@ -226,7 +245,7 @@ void token::setdisplay( const name&         issuer,
     dt.web_link    = web_link;
     dt.background  = background;
     dt.json_meta   = json_meta;
-    displaytable.set( dt, issuer );
+    displaytable.set( dt, st.issuer );
 }
 
 void token::issue( const asset& quantity, const string& memo )
@@ -259,24 +278,26 @@ void token::stake_one( const stake_stats& sk, const name& owner, const asset& qu
     if( sk.stake_per_bucket.amount > 0 ) {
        asset stake_quantity = sk.stake_per_bucket;
        stake_quantity.amount = (int64_t)((int128_t)quantity.amount*sk.stake_per_bucket.amount/sk.token_bucket.amount);
-       action(
-          permission_level{owner, "active"_n},
-          sk.stake_token_contract,
-          "transfer"_n,
-          std::make_tuple(owner,
-                          sk.stake_to,
-                          stake_quantity,
-                          std::string("rainbow stake"))
-       ).send();
+       if( sk.deferral_index == no_index ) {
+          action(
+             permission_level{owner, "active"_n},
+             sk.stake_token_contract,
+             "transfer"_n,
+             std::make_tuple(owner,
+                             sk.stake_to,
+                             stake_quantity,
+                             std::string("rainbow stake"))
+          ).send();
+       } else {
+          // TODO handle deferred stake
+       }
     }
 }
 
 void token::stake_all( const name& owner, const asset& quantity ) {
     stakes stakestable( get_self(), quantity.symbol.code().raw() );
     for( auto itr = stakestable.begin(); itr != stakestable.end(); itr++ ) {
-       if( !itr->deferred ) {
-          stake_one( *itr, owner, quantity );
-       }
+       stake_one( *itr, owner, quantity );
     }
 }
 
@@ -286,15 +307,19 @@ void token::unstake_one( const stake_stats& sk, const name& owner, const asset& 
        stake_quantity.amount = (int64_t)((int128_t)quantity.amount*sk.stake_per_bucket.amount/sk.token_bucket.amount);
        // TODO (a) if proportional, compute unstake amount based on current escrow balance and note in memo string
        //      (b) if not proportional, check that escrow is fully funded
-       action(
-          permission_level{sk.stake_to,"active"_n},
-          sk.stake_token_contract,
-          "transfer"_n,
-          std::make_tuple(sk.stake_to,
-                          owner,
-                          stake_quantity,
-                          std::string("rainbow unstake"))
-       ).send();
+       if( sk.deferral_index == no_index ) {
+          action(
+             permission_level{sk.stake_to,"active"_n},
+             sk.stake_token_contract,
+             "transfer"_n,
+             std::make_tuple(sk.stake_to,
+                             owner,
+                             stake_quantity,
+                             std::string("rainbow unstake"))
+          ).send();
+       } else {
+          // TODO handle deferred unstake
+       }
     }
 }
 void token::unstake_all( const name& owner, const asset& quantity ) {
@@ -489,5 +514,27 @@ void token::resetram( const name& table, const string& scope, const uint32_t& li
   }
 }
 
+void token::defdeferral( const symbol_code&  symbolcode,
+                         const name&         deferral_contract,
+                         const uint64_t&     parent_lock_id )
+{
+   auto sym_code_raw = symbolcode.raw();
+   stats statstable( get_self(), sym_code_raw );
+   const auto& st = statstable.get( sym_code_raw, "symbol does not exist" );
+   configs configtable( get_self(), sym_code_raw );
+   auto cf = configtable.get();
+   deferrals defertable( get_self(), sym_code_raw );
+   uint128_t lockid = (uint128_t)parent_lock_id<<64 | deferral_contract.value;
+   auto lockid_index = defertable.get_index<"lockid"_n>();
+   auto existing = lockid_index.find( lockid );
+   // TODO: allow redefinition if supply == 0
+   check( existing == lockid_index.end(), "deferral redefinition not allowed" );
+   const auto& df = *defertable.emplace( st.issuer, [&]( auto& s ) {
+       s.index             = defertable.available_primary_key();
+       s.deferral_contract = deferral_contract;
+       s.parent_lock_id    = parent_lock_id;
+       s.child_lock_id     = static_cast<uint64_t>(-1);
+    });
+}
 
 } /// namespace eosio
