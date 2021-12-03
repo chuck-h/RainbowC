@@ -86,7 +86,7 @@ void token::create( const name&   issuer,
     };
     configtable.set( new_config, issuer );
     displays displaytable( get_self(), sym.code().raw() );
-    currency_display new_display{ "", "", "", "", "", "" };
+    currency_display new_display{ "" };
     displaytable.set( new_display, issuer );
 }
 
@@ -220,11 +220,6 @@ void token::setstake( const asset&    token_bucket,
 }
 
 void token::setdisplay( const symbol_code&  symbolcode,
-                        const string&       token_name,
-                        const string&       logo,
-                        const string&       logo_lg,
-                        const string&       web_link,
-                        const string&       background,
                         const string&       json_meta )
 {
     auto sym_code_raw = symbolcode.raw();
@@ -233,17 +228,8 @@ void token::setdisplay( const symbol_code&  symbolcode,
     require_auth( st.issuer );
     displays displaytable( get_self(), sym_code_raw );
     auto dt = displaytable.get();
-    check( token_name.size() <= 32, "name has more than 32 bytes" );
-    const string *url_list[] = { &logo, &logo_lg, &web_link, &background };
-    for( const string* s : url_list ) {
-       check( s->size() <= 256, "url string has more than 256 bytes" );
-    }
-    check( json_meta.size() <= 1024, "json metadata has more than 1024 bytes" );
-    dt.name        = token_name;
-    dt.logo        = logo;
-    dt.logo_lg     = logo_lg;
-    dt.web_link    = web_link;
-    dt.background  = background;
+    check( json_meta.size() <= 2048, "json metadata has more than 2048 bytes" );
+    // TODO check json_meta string for safety, parse json, and check name length
     dt.json_meta   = json_meta;
     displaytable.set( dt, st.issuer );
 }

@@ -131,21 +131,22 @@ namespace eosio {
           * except `name` and `json_meta` are expected to be urls. Issuer pays for RAM.
           * The currency_display table is intended for apps to access (e.g. via nodeos chain API).
           *
-          * @param issuer - the account that created the token,
           * @param symbol_code - the token,
-          * @param memo - the memo string to accompany the transaction.
+          * @param metadata - json string of metadata. Minimum expected fields are
+          *      name - human friendly name of token, max 32 char
+          *      logo - url pointing to a small png or gif image (typ. 128x128 with transparency)
+          *   Recommended fields are
+          *      logo_lg - url pointing to a larger png or gif image (typ. 1024 x 1024)
+          *      web_link - url pointing to a web page describing the token & application
+          *      background - url pointing to a png or gif image intended as a UI background
+          *                     (e.g. as used in Seeds Light Wallet)
+          *   Additional fields are permitted within the overal length limit: max 2048 chars.
           *
           * @pre Token symbol must have already been created by this issuer
           * @pre String parameters must be within length limits
-          *       name < 32 char, json_meta < 1024 char, all others < 256 char
           */
          [[eosio::action]]
          void setdisplay( const symbol_code&  symbolcode,
-                          const string&       name,
-                          const string&       logo,
-                          const string&       logo_lg,
-                          const string&       web_link,
-                          const string&       background,
                           const string&       json_meta
          );
 
@@ -318,11 +319,6 @@ namespace eosio {
          };
 
          struct [[eosio::table]] currency_display {  // scoped on token symbol code
-            string     name;
-            string     logo;
-            string     logo_lg;
-            string     web_link;
-            string     background;
             string     json_meta;
          };
 
