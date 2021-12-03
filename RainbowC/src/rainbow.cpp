@@ -288,6 +288,7 @@ void token::stake_all( const name& owner, const asset& quantity ) {
 }
 
 void token::unstake_one( const stake_stats& sk, const name& owner, const asset& quantity ) {
+    check( !sk.proportional, "proportional stake not implemented" );
     if( sk.stake_per_bucket.amount > 0 ) {
        asset stake_quantity = sk.stake_per_bucket;
        stake_quantity.amount = (int64_t)((int128_t)quantity.amount*sk.stake_per_bucket.amount/sk.token_bucket.amount);
