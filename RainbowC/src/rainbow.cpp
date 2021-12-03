@@ -3,14 +3,16 @@
 
 namespace eosio {
 
-void token::create( const name&   issuer,
-                    const asset&  maximum_supply,
-                    const name&   membership_mgr,
-                    const name&   withdrawal_mgr,
-                    const name&   withdraw_to,
-                    const name&   freeze_mgr,
-                    const string& redeem_locked_until_string,
-                    const string& config_locked_until_string)
+void token::create( const name&    issuer,
+                    const asset&   maximum_supply,
+                    const name&    membership_mgr,
+                    const name&    withdrawal_mgr,
+                    const name&    withdraw_to,
+                    const name&    freeze_mgr,
+                    const string&  redeem_locked_until_string,
+                    const string&  config_locked_until_string,
+                    const string&  cred_limit_symbol,
+                    const string&  pos_limit_symbol )
 {
     require_auth( issuer );
     auto sym = maximum_supply.symbol;
@@ -35,6 +37,18 @@ void token::create( const name&   issuer,
        auto days_from_now = (config_locked_until.time_since_epoch() -
                              current_time_point().time_since_epoch()).count()/days(1).count();
        check( days_from_now < 100*365 && days_from_now > -10*365, "config lock date out of range" );
+    }
+    symbol_code credlim = symbol_code( cred_limit_symbol );
+    if( credlim != symbol_code(0) ) {
+       stats statstable_cl( get_self(), credlim.raw() );
+       auto cl = statstable_cl.get( credlim.raw(), "credit limit token does not exist" );
+       check( cl.max_supply.symbol.precision()==maximum_supply.symbol.precision(), "credit limit token precision does not match" );
+    }
+    symbol_code poslim = symbol_code( pos_limit_symbol );
+    if( poslim != symbol_code(0) ) {
+       stats statstable_pl( get_self(), poslim.raw() );
+       auto pl = statstable_pl.get( poslim.raw(), "positive limit token does not exist" );
+       check( pl.max_supply.symbol.precision()==maximum_supply.symbol.precision(), "credit limit token precision does not match" );
     }
     stats statstable( get_self(), sym.code().raw() );
     auto existing = statstable.find( sym.code().raw() );
@@ -64,6 +78,8 @@ void token::create( const name&   issuer,
        cf.freeze_mgr    = freeze_mgr;
        cf.redeem_locked_until = redeem_locked_until;
        cf.config_locked_until = config_locked_until;
+       cf.cred_limit = credlim;
+       cf.positive_limit = poslim;
        configtable.set( cf, issuer );
     return;
     }
@@ -82,7 +98,9 @@ void token::create( const name&   issuer,
        .redeem_locked_until = redeem_locked_until,
        .config_locked_until = config_locked_until,
        .transfers_frozen = false,
-       .approved      = false
+       .approved      = false,
+       .cred_limit = credlim,
+       .positive_limit = poslim
     };
     configtable.set( new_config, issuer );
     displays displaytable( get_self(), sym.code().raw() );
@@ -257,7 +275,7 @@ void token::issue( const asset& quantity, const string& memo )
     });
 
     stake_all( st.issuer, quantity );
-    add_balance( st.issuer, quantity, st.issuer );
+    add_balance( st.issuer, quantity, st.issuer, cf.positive_limit );
 }
 
 void token::stake_one( const stake_stats& sk, const name& owner, const asset& quantity ) {
@@ -341,7 +359,7 @@ void token::retire( const name& owner, const asset& quantity, const string& memo
        s.supply -= quantity;
     });
 
-    sub_balance( owner, quantity );
+    sub_balance( owner, quantity, symbol_code(0) );
     unstake_all( owner, quantity );
 }
 
@@ -384,30 +402,55 @@ void token::transfer( const name&    from,
 
     auto payer = has_auth( to ) ? to : from;
 
-    sub_balance( from, quantity );
-    add_balance( to, quantity, payer );
+    sub_balance( from, quantity, cf.cred_limit );
+    add_balance( to, quantity, payer, cf.positive_limit );
+
+    // TODO: consider whether tokens transferred from/to accounts in negative balance should be
+    //  taken from/returned to the issuer account. This would ensure that there is stake for
+    //  all the tokens in circulation.
+
 }
 
-void token::sub_balance( const name& owner, const asset& value ) {
+void token::sub_balance( const name& owner, const asset& value, const symbol_code& limit_symbol ) {
    accounts from_acnts( get_self(), owner.value );
 
    const auto& from = from_acnts.get( value.symbol.code().raw(), "no balance object found" );
-   check( from.balance.amount >= value.amount, "overdrawn balance" );
+   uint64_t limit = 0;
+   if( limit_symbol != symbol_code(0) ) {
+      auto cred = from_acnts.find( limit_symbol.raw() );
+      if( cred != from_acnts.end() ) {
+         const auto& lim = *cred;
+         check( lim.balance.symbol.precision() == value.symbol.precision(), "limit precision mismatch" );
+         limit = lim.balance.amount;
+      }
+   }
+   check( from.balance.amount + limit >= value.amount, "overdrawn balance" );
 
    from_acnts.modify( from, same_payer, [&]( auto& a ) {
          a.balance -= value;
       });
 }
 
-void token::add_balance( const name& owner, const asset& value, const name& ram_payer )
+void token::add_balance( const name& owner, const asset& value, const name& ram_payer, const symbol_code& limit_symbol )
 {
    accounts to_acnts( get_self(), owner.value );
    auto to = to_acnts.find( value.symbol.code().raw() );
+   uint64_t limit = value.max_amount;
+   if( limit_symbol != symbol_code(0) ) {
+      auto pos = to_acnts.find( limit_symbol.raw() );
+      if( pos != to_acnts.end() ) {
+         const auto& lim = *pos;
+         check( lim.balance.symbol.precision() == value.symbol.precision(), "limit precision mismatch" );
+         limit = lim.balance.amount;
+      }
+   }
    if( to == to_acnts.end() ) {
+      check( limit >= value.amount, "transfer exceeds receiver positive limit" );
       to_acnts.emplace( ram_payer, [&]( auto& a ){
         a.balance = value;
       });
    } else {
+      check( limit >= to->balance.amount + value.amount, "transfer exceeds receiver positive limit" );
       to_acnts.modify( to, same_payer, [&]( auto& a ) {
         a.balance += value;
       });

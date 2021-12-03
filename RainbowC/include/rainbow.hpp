@@ -53,6 +53,10 @@ namespace eosio {
           *   disallowed until this time; blank string is equivalent to "now" (i.e. unlocked).
           * @param config_locked_until - an ISO8601 date string; changes to token characteristics
           *   are disallowed until this time; blank string is equivalent to "now" (i.e. unlocked).
+          * @param cred_limit_symbol - a "sister" token (typically "frozen"), also managed by this contract;
+          *   a positive balance in the sister token will permit a user to overspend to that amount
+          * @param pos_limit_symbol - a "sister" token (typically "frozen"), also managed by this contract;
+          *   no user transfer is allowed to increase the user balance over the sister token balance.
           *
           * @pre Token symbol has to be valid,
           * @pre Token symbol must not be already created, OR if it has been created,
@@ -66,6 +70,9 @@ namespace eosio {
           * @pre membership manager must be an existing account;
           * @pre redeem_locked_until must specify a time within +100/-10 yrs of now;
           * @pre config_locked_until must specify a time within +100/-10 yrs of now;
+          * @pre cred_limit_symbol must be an existing token of matching precision on this contract, or empty
+          * @pre pos_limit_symbol must be an existing token of matching precision on this contract, or empty
+          
           */
          [[eosio::action]]
          void create( const name&   issuer,
@@ -75,7 +82,9 @@ namespace eosio {
                       const name&   withdraw_to,
                       const name&   freeze_mgr,
                       const string& redeem_locked_until,
-                      const string& config_locked_until);
+                      const string& config_locked_until,
+                      const string& cred_limit_symbol,
+                      const string& pos_limit_symbol );
 
 
          /**
@@ -189,6 +198,10 @@ namespace eosio {
           * 
           * @pre The transfers_frozen flag in the configs table must be false, except for
           *   administrative-account transfers
+          * @pre The `from` account balance must be sufficient for the transfer (allowing for
+          *   credit if configured with credit_limit_symbol in `create` operation)
+          * @pre If configured with positive_limit_symbol in `create` operation, the transfer
+          *   must not put the `to` account over its maximum limit
           */
          [[eosio::action]]
          void transfer( const name&    from,
@@ -308,14 +321,16 @@ namespace eosio {
          };
 
          struct [[eosio::table]] currency_config {  // scoped on token symbol code
-            name       membership_mgr;
-            name       withdrawal_mgr;
-            name       withdraw_to;
-            name       freeze_mgr;
-            time_point redeem_locked_until;
-            time_point config_locked_until;
-            bool       transfers_frozen;
-            bool       approved;
+            name        membership_mgr;
+            name        withdrawal_mgr;
+            name        withdraw_to;
+            name        freeze_mgr;
+            time_point  redeem_locked_until;
+            time_point  config_locked_until;
+            bool        transfers_frozen;
+            bool        approved;
+            symbol_code cred_limit;
+            symbol_code positive_limit;
          };
 
          struct [[eosio::table]] currency_display {  // scoped on token symbol code
@@ -369,8 +384,9 @@ namespace eosio {
                >
             > deferrals;
 
-         void sub_balance( const name& owner, const asset& value );
-         void add_balance( const name& owner, const asset& value, const name& ram_payer );
+         void sub_balance( const name& owner, const asset& value, const symbol_code& limit_symbol );
+         void add_balance( const name& owner, const asset& value, const name& ram_payer,
+                           const symbol_code& limit_symbol );
          void stake_all( const name& owner, const asset& quantity );
          void unstake_all( const name& owner, const asset& quantity );
          void stake_one( const stake_stats& sk, const name& owner, const asset& quantity );
