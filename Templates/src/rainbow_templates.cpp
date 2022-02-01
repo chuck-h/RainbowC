@@ -56,9 +56,10 @@ void rbtemplates::importer( const name& caller,
     }
     if( table == "stakes" || table == "all" ) {
        stakes tmpl_stakestable( get_self(), sym_code_raw );
-       auto existing = tmpl_stakestable.find( sym_code_raw );
-       check( existing == tmpl_stakestable.end(), "cannot overwrite template" );
-       while( existing != tmpl_stakestable.end() ) {
+       check( tmpl_stakestable.begin() == tmpl_stakestable.end(), "cannot overwrite template" );
+       stakes stakestable( contract, sym_code_raw );
+       auto existing = stakestable.begin();
+       while( existing != stakestable.end() ) {
           tmpl_stakestable.emplace( caller, [&]( auto& s ) {
              s.index                = tmpl_stakestable.available_primary_key();
              s.token_bucket         = existing->token_bucket;

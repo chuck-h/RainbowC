@@ -66,12 +66,6 @@ using namespace eosio;
             }
          };
 
-         TABLE symbolt { // scoped on get_self()
-            symbol_code  symbolcode;
-
-            uint64_t primary_key()const { return symbolcode.raw(); };
-         };
-
          typedef eosio::multi_index< "stat"_n, currency_stats > stats;
          typedef eosio::singleton< "configs"_n, currency_config > configs;
          typedef eosio::multi_index< "configs"_n, currency_config >  dump_for_config;
