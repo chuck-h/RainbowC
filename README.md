@@ -1,5 +1,7 @@
 # Rainbow Contract
 
+*This contract is now included as `seeds.rainbows.cpp` in https://github.com/chuck-h/seeds-smart-contracts . Ongoing development occurs there.*
+
 The Rainbow Contract is a tool which supports digital *tokens* on the Telos blockchain. It is a flexible tool, and offers
 several different configuration options targeted towards different types of use cases. This Rainbow Contract was
 inspired by a concept for locally-controlled currency within the SEEDS ecosystem.
